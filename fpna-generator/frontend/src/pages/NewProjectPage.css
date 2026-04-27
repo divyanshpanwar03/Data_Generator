@@ -1,0 +1,286 @@
+/* --- LAYOUT & CONTAINERS --- */
+.np-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 40px;
+  width: 100%;
+}
+
+.back-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 24px;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.back-btn:hover {
+  color: #0f172a;
+}
+
+.np-split-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: start;
+  margin-top: 32px;
+}
+
+.np-left-col,
+.np-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 20px;
+}
+
+.card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* --- INDUSTRY SELECTION CARDS --- */
+.industry-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.industry-card {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  padding: 20px;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  outline: none;
+}
+
+.industry-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.industry-card.active {
+  border-color: #e11d48;
+  background: #fffbfa;
+  box-shadow: 0 4px 15px rgba(225, 29, 72, 0.1);
+}
+
+.industry-icon {
+  font-size: 24px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border-radius: 12px;
+  margin-right: 20px;
+  flex-shrink: 0;
+}
+
+.industry-card.active .industry-icon {
+  background: #ffe4e6;
+}
+
+.industry-card-content {
+  flex-grow: 1;
+}
+
+.industry-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.industry-card.active .industry-title {
+  color: #be123c;
+}
+
+.industry-desc {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* --- RIGHT COLUMN OVERRIDES & EDITABLE TAGS --- */
+.overrides-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.overrides-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tags-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tags-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+/* --- RED THEME FOR INPUTS & TAGS --- */
+
+/* The main container box for the tags */
+.tags-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  background: #fffbfa; /* Light red/pink tint */
+  border: 1px solid #fda4af; /* Solid red border */
+  border-radius: 8px;
+  min-height: 52px;
+  transition: all 0.2s ease;
+  cursor: text;
+}
+
+.tags-box:focus-within {
+  border-color: #e11d48;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.15);
+}
+
+/* The individual tag pills */
+.tag-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #ffe4e6; /* Rose background */
+  border: 1px solid #fecdd3; /* Darker rose border */
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #be123c; /* Deep red text */
+}
+
+/* The 'x' remove button on tags */
+.tag-remove-btn {
+  background: transparent;
+  border: none;
+  color: #e11d48; /* Red icon */
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0 0 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.tag-remove-btn:hover {
+  color: #9f1239; /* Darker red on hover */
+}
+
+/* The strict dropdowns for Seasonality/Inflation */
+.config-select {
+  width: 100%;
+  padding: 12px 14px;
+  background-color: #fffbfa; /* Light red/pink tint */
+  border: 1px solid #fda4af; /* Solid red border */
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #9f1239; /* Deep red text */
+  outline: none;
+  cursor: pointer;
+  appearance: auto;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.config-select:focus,
+.config-select:hover {
+  border-color: #e11d48;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.15);
+}
+/* --- FOOTER ACTIONS --- */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+/* --- CONFIG SELECT DROPDOWNS --- */
+.config-select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0f172a;
+  background-color: #f8fafc;
+  outline: none;
+  cursor: pointer;
+  appearance: auto;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.config-select:focus,
+.config-select:hover {
+  border-color: #e11d48;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.1);
+}
+/* The transparent text input inside the tag box */
+.tags-input {
+  flex-grow: 1;
+  min-width: 140px;
+  border: none !important;        /* Forces the ugly gray border to disappear */
+  background: transparent !important; /* Removes default white background */
+  box-shadow: none !important;    /* Removes any default browser glow */
+  outline: none !important;       /* Prevents the blue outline when clicking */
+  font-size: 14px;
+  color: #9f1239;                 /* Matches the red theme text */
+  padding: 6px 4px;
+  margin: 0;
+  font-family: inherit;
+}
+
+.tags-input::placeholder {
+  color: #2a1d1e;                 /* Light red/pink placeholder to match the theme */
+  font-weight: 500;
+}
