@@ -124,20 +124,20 @@ class FPnAGenerator:
         self.inflation_path = np.array([(1 + self.annual_inflation / 12) ** (i + 1) for i in range(n)])
         self.seasonality_profile = self.tmpl["seasonality_profiles"].get(request.seasonality_profile, [1.0] * 12)
 
-        # ---------------------------------------------------------
+# ---------------------------------------------------------
         # Dynamic Dimension Mapping
         # ---------------------------------------------------------
         self.dimensions = request.dimensions
         self.dimension_members = {}
         
-        # Populate the members dictionary for ALL active dimensions
+        # CRITICAL FIX: Prevent empty arrays from collapsing the matrix to 0 rows!
         for dim in self.dimensions:
-            if dim in request.custom_dimensions:
+            if dim in request.custom_dimensions and len(request.custom_dimensions[dim]) > 0:
                 self.dimension_members[dim] = request.custom_dimensions[dim]
             else:
-                self.dimension_members[dim] = ["Undefined"]
+                self.dimension_members[dim] = ["Undefined"] # Fallback if array is empty
 
-        # Safely extract core dimensions for baseline math (fallback to defaults if user deleted them)
+        # Safely extract core dimensions for baseline math
         self.products = self.dimension_members.get("product", ["Core Product"])
         self.regions = self.dimension_members.get("region", ["HQ"])
 

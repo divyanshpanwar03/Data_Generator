@@ -170,20 +170,21 @@ export default function NewProjectPage({ navigate }) {
                 <div className="section-label">2. Industry Template</div>
                 <div className="industry-grid">
                   {templates.map(t => {
-                    const meta = INDUSTRY_META[t.industry] || { icon: "📈", color: "#3b82f6", desc: t.description };
-                    const active = form.industry === t.industry;
-                    return (
-                      <button
-                        key={t.industry}
-                        onClick={() => handleSelectIndustry(t.industry)}
-                        className={`industry-card ${active ? 'active' : ''}`}
-                      >
-                        <div className="industry-icon">{meta.icon}</div>
+                  const meta = INDUSTRY_META[t.industry] || { icon: "📈", color: "#3b82f6", desc: t.description };
+                  const active = form.industry === t.industry;
+                  return (
+                    <button key={t.industry} onClick={() => handleSelectIndustry(t.industry)} className={`industry-card ${active ? 'active' : ''}`}>
+                      <div className="industry-icon">{meta.icon}</div>
+                      
+                      {/* Wrap the text so it stacks vertically! */}
+                      <div className="industry-card-content">
                         <div className="industry-title">{t.label}</div>
                         <div className="industry-desc">{meta.desc}</div>
-                      </button>
-                    );
-                  })}
+                      </div>
+                      
+                    </button>
+                  );
+                })}
                 </div>
               </Card>
             </div>

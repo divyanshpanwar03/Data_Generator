@@ -133,7 +133,7 @@ export default function ProjectsPage({ navigate }) {
   return (
     <div className="page-wrapper">
       <header className="top-navbar">
-        <h2 className="navbar-title">Projects</h2>
+        <h2 className="navbar-title">Synthetic Data Generator</h2>
         <button className="btn-red" onClick={(e) => { e.preventDefault(); navigate("new-project"); }}>+ New Project</button>
       </header>
 

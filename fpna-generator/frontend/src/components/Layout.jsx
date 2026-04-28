@@ -6,7 +6,7 @@ export default function Layout({ children, navigate }) {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1 className="sidebar-title">FP&A Studio</h1>
-          <span className="sidebar-subtitle">v1.0 • Enterprise</span>
+          <span className="sidebar-subtitle"> Enterprise</span>
         </div>
 
         <div className="sidebar-menu">

@@ -11,6 +11,10 @@ export default function ProjectDetailPage({ navigate, params }) {
   const [loading, setLoading] = useState(true);
   const [expandedDataset, setExpandedDataset] = useState(null);
 
+  // --- NEW: COMMAND BAR STATE ---
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortParam, setSortParam] = useState("newest");
+
   const [paramsModal, setParamsModal] = useState({ isOpen: false, params: {} });
   const [advModal, setAdvModal] = useState({ isOpen: false, datasetId: null, fileName: null, schema: [], selectedColumns: [], filters: {} });
   const [inlineBuilder, setInlineBuilder] = useState({ isOpen: false, datasetId: null, targetFile: "", customFileName: "", schema: [], selectedColumns: [], filters: {}, isLoading: false, error: null });
@@ -30,6 +34,21 @@ export default function ProjectDetailPage({ navigate, params }) {
 
   const toggleDataset = (id) => setExpandedDataset(expandedDataset === id ? null : id);
 
+  const handleDeleteDataset = async (e, datasetId) => {
+    e.stopPropagation(); 
+    if (!window.confirm("Are you sure you want to permanently delete this dataset and all its files?")) return;
+    
+    try {
+      const res = await fetch(`${API_BASE}/projects/${projectId}/datasets/${datasetId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error("Failed to delete dataset");
+      
+      setDatasets(datasets.filter(d => d.id !== datasetId));
+      if (expandedDataset === datasetId) setExpandedDataset(null);
+    } catch (err) {
+      alert("Error deleting dataset: " + err.message);
+    }
+  };
+
   const getFileMeta = (filename) => {
     if (filename.includes('fact')) return { icon: '📊', desc: 'Full dataset fact table' };
     if (filename.includes('dim_time')) return { icon: '📅', desc: 'Time definitions' };
@@ -41,6 +60,7 @@ export default function ProjectDetailPage({ navigate, params }) {
     window.location.href = `${API_BASE}/projects/${projectId}/datasets/${datasetId}/download?file=${fileName}`;
   };
 
+  // --- EXCEL BUILDER (MODAL) LOGIC ---
   const loadInlineSchema = (datasetId, fileName, forceOpen = false) => {
     setInlineBuilder(prev => ({
       ...prev, isOpen: forceOpen ? true : prev.isOpen, datasetId: datasetId, targetFile: fileName, customFileName: "",
@@ -124,6 +144,7 @@ export default function ProjectDetailPage({ navigate, params }) {
     } catch (err) { alert(`Generation Error: ${err.message}`); }
   };
 
+  // --- QUICK FILE MODAL LOGIC ---
   const openAdvancedFilter = async (datasetId, fileName) => {
     try {
       const res = await fetch(`${API_BASE}/projects/${projectId}/datasets/${datasetId}/files/${fileName}/advanced-schema`);
@@ -171,6 +192,26 @@ export default function ProjectDetailPage({ navigate, params }) {
     } catch (err) { alert(`Slice Error: ${err.message}`); }
   };
 
+  // --- FILTER & SORT LOGIC FOR COMMAND BAR ---
+// --- FILTER & SORT LOGIC FOR COMMAND BAR ---
+  const processedDatasets = datasets
+    .filter(ds => ds.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      // Sort by Created At
+      if (sortParam === "created-desc") return new Date(b.created_at) - new Date(a.created_at);
+      if (sortParam === "created-asc") return new Date(a.created_at) - new Date(b.created_at);
+      
+      // Sort by Rows Generated
+      if (sortParam === "rows-desc") return b.total_row_count - a.total_row_count;
+      if (sortParam === "rows-asc") return a.total_row_count - b.total_row_count;
+      
+      // Sort by Name
+      if (sortParam === "name-asc") return a.name.localeCompare(b.name);
+      if (sortParam === "name-desc") return b.name.localeCompare(a.name);
+      
+      return 0;
+    });
+
   if (loading) return <div className="loading-container">Loading...</div>;
 
   return (
@@ -189,9 +230,37 @@ export default function ProjectDetailPage({ navigate, params }) {
       </header>
 
       <div className="pd-content">
+        
+        {/* NEW COMMAND BAR ADDED HERE */}
+        <div className="ds-command-bar">
+          <div className="ds-command-left">
+             <span style={{fontWeight: 800, color: '#475569'}}>{processedDatasets.length} Datasets</span>
+          </div>
+          <div className="ds-command-right">
+             <span style={{fontSize: '14px', color: '#64748b', fontWeight: 700}}>Sort:</span>
+             <select className="ds-sort-select" value={sortParam} onChange={e => setSortParam(e.target.value)}>
+                <option value="created-desc">Created (Newest First)</option>
+                <option value="created-asc">Created (Oldest First)</option>
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+                <option value="rows-desc">Rows (Most First)</option>
+                <option value="rows-asc">Rows (Fewest First)</option>
+             </select>
+             <input
+               type="text"
+               className="ds-search-input"
+               placeholder="Search datasets..."
+               value={searchQuery}
+               onChange={e => setSearchQuery(e.target.value)}
+             />
+          </div>
+        </div>
+
         {datasets.length === 0 ? <div className="empty-state">No datasets generated yet.</div> : (
           <div className="dataset-list">
-            {datasets.map(ds => {
+            
+            {/* Map over the PROCESSED datasets so search/sort works instantly */}
+            {processedDatasets.map(ds => {
               const isExpanded = expandedDataset === ds.id;
               const p = ds.params || {};
               return (
@@ -202,7 +271,22 @@ export default function ProjectDetailPage({ navigate, params }) {
                       <h3>{ds.name}</h3>
                       <p className="ds-meta">{ds.total_row_count.toLocaleString()} rows • {new Date(ds.created_at).toLocaleString()}</p>
                     </div>
-                    <span className={`status-badge ${ds.status.toLowerCase()}`}>{ds.status.toUpperCase()}</span>
+                    
+                    <div style={{display: 'flex', alignItems: 'center', gap: '16px'}}>
+                      <span className={`status-badge ${ds.status.toLowerCase()}`}>{ds.status.toUpperCase()}</span>
+                      <button 
+                        onClick={(e) => handleDeleteDataset(e, ds.id)} 
+                        style={{
+                          background: 'transparent', border: 'none', color: '#94a3b8', 
+                          fontSize: '18px', fontWeight: '800', cursor: 'pointer', padding: '4px'
+                        }}
+                        onMouseOver={e => e.target.style.color = '#e11d48'}
+                        onMouseOut={e => e.target.style.color = '#94a3b8'}
+                        title="Delete Dataset"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
 
                   {isExpanded && (

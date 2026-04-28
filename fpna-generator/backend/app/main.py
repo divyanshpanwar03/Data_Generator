@@ -394,3 +394,33 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     project_dir = DATA_ROOT / str(project_id)
     if project_dir.exists(): shutil.rmtree(project_dir)
     return {"deleted": project_id}
+
+@app.delete("/api/projects/{project_id}/datasets/{dataset_id}")
+def delete_dataset(project_id: int, dataset_id: int, db: Session = Depends(get_db)):
+    # 1. Find the dataset
+    db_dataset = db.query(models.Dataset).filter(models.Dataset.id == dataset_id, models.Dataset.project_id == project_id).first()
+    
+    if not db_dataset: 
+        raise HTTPException(status_code=404, detail="Dataset not found in database.")
+    
+    try:
+        # 2. CRITICAL FIX: Explicitly delete child records first to prevent SQLite constraint crashes!
+        db.query(models.DatasetFile).filter(models.DatasetFile.dataset_id == dataset_id).delete()
+        
+        # 3. Now it is safe to delete the parent dataset
+        db.delete(db_dataset)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+    # 4. Safely wipe the physical CSV files from the hard drive
+    ds_dir = DATA_ROOT / str(project_id) / str(dataset_id)
+    if ds_dir.exists():
+        try:
+            shutil.rmtree(ds_dir)
+        except Exception as e:
+            print(f"Warning: OS lock prevented physical folder deletion: {e}")
+            pass 
+        
+    return {"deleted": dataset_id}

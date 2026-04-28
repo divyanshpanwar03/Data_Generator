@@ -1,8 +1,8 @@
 /* --- LAYOUT & CONTAINERS --- */
 .np-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 40px;
+  max-width: 1400px;
+  margin: 0;
+  padding: 32px 40px 32px 24px;
   width: 100%;
 }
 
