@@ -2,12 +2,10 @@ import React, { useState, useEffect, useMemo } from "react";
 import "./NewDatasetPage.css";
 import { api } from "../hooks/api";
 
-// CRITICAL FIX: Much stronger parser to catch database strings and arrays
 const parseSafeArray = (data) => {
   if (Array.isArray(data)) return data;
   if (typeof data === 'string') {
-    try { return JSON.parse(data); } catch(e) {}
-    try { return JSON.parse(data.replace(/'/g, '"')); } catch (e) {}
+    try { return JSON.parse(data.replace(/'/g, '"')); } catch (e) { return []; }
   }
   return [];
 };
@@ -24,8 +22,10 @@ export default function NewDatasetPage({ navigate, params }) {
     seasonality_profile: "flat", inflation_preset: "medium", marketing_intensity: "1.0", sentiment_volatility: "0.15", fx_volatility: "0.05",
   });
 
-  const [allDimensions] = useState(["Region", "Product", "Channel"]);
+  // --- CHANGED: allDimensions is now updatable ---
+  const [allDimensions, setAllDimensions] = useState(["Region", "Product", "Channel"]);
   const [activeDimensions, setActiveDimensions] = useState(["Region", "Product", "Channel"]);
+  const [newDimensionName, setNewDimensionName] = useState("");
 
   const [scenarios] = useState(["Base Scenario", "High Growth", "Recession"]);
   const [selectedScenarios, setSelectedScenarios] = useState(["Base Scenario"]);
@@ -52,15 +52,14 @@ export default function NewDatasetPage({ navigate, params }) {
     api.getProject(projectId).then(project => {
       if (!project) return;
       const overrides = project.template_overrides || project.parameters || {};
-      
       const customProducts = parseSafeArray(overrides.products);
       const customRegions = parseSafeArray(overrides.regions);
 
       if (customProducts.length > 0 || customRegions.length > 0) {
         setAvailableMembers(prev => ({
           ...prev,
-          Product: Array.from(new Set([...(prev.Product || []), ...customProducts])),
-          Region: Array.from(new Set([...(prev.Region || []), ...customRegions]))
+          Product: Array.from(new Set([...prev.Product, ...customProducts])),
+          Region: Array.from(new Set([...prev.Region, ...customRegions]))
         }));
         setSelectedMembers(prev => ({
           ...prev,
@@ -78,12 +77,30 @@ export default function NewDatasetPage({ navigate, params }) {
   }, [projectId]);
 
   const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
   const toggleArrayItem = (setter, item) => setter(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
 
   const toggleMember = (dim, member) => setSelectedMembers(prev => {
     const current = prev[dim] || [];
     return { ...prev, [dim]: current.includes(member) ? current.filter(m => m !== member) : [...current, member] };
   });
+
+  // --- NEW: Add a Custom Column / Dimension ---
+  const handleAddDimension = () => {
+    const dim = newDimensionName.trim();
+    if (!dim) return;
+    
+    // Format perfectly (e.g. "cohort" -> "Cohort")
+    const formattedDim = dim.charAt(0).toUpperCase() + dim.slice(1);
+
+    if (!allDimensions.includes(formattedDim)) {
+      setAllDimensions(prev => [...prev, formattedDim]);
+      setActiveDimensions(prev => [...prev, formattedDim]);
+      setAvailableMembers(prev => ({ ...prev, [formattedDim]: [] }));
+      setSelectedMembers(prev => ({ ...prev, [formattedDim]: [] }));
+    }
+    setNewDimensionName("");
+  };
 
   const handleAddMember = (dim) => {
     const val = newMemberInputs[dim]?.trim();
@@ -132,13 +149,12 @@ export default function NewDatasetPage({ navigate, params }) {
   const handleGenerate = async () => {
     if (!formData.name.trim()) return alert("Please enter a dataset name.");
     
-    // CRITICAL FIX: Ensure no active dimension is submitted completely empty
+    // --- CHANGED: Dynamically validate all custom and core dimensions ---
     for (const dim of activeDimensions) {
       if (!selectedMembers[dim] || selectedMembers[dim].length === 0) {
         return alert(`Error: You have '${dim}' enabled as an Active Dimension, but you haven't selected any members for it. Please select at least one!`);
       }
     }
-    
     if (selectedAccounts.length === 0) return alert("Error: You must select at least one Account item.");
 
     setIsGenerating(true);
@@ -173,10 +189,17 @@ export default function NewDatasetPage({ navigate, params }) {
     { id: 4, title: "Macroeconomic Parameters", desc: "Inflation and FX" },
   ];
 
+  const renderSummaryRow = (label, value, isLast = false) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", paddingBottom: "10px", borderBottom: isLast ? "none" : "1px dashed #cbd5e1", marginBottom: isLast ? "0" : "10px" }}>
+      <span style={{ color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", fontSize: "11px" }}>{label}</span>
+      <strong style={{ color: "#0f172a" }}>{value}</strong>
+    </div>
+  );
+
   return (
     <div className="new-ds-wrapper">
       <div className="new-ds-header">
-        <button onClick={() => navigate("project-detail", { projectId })} className="back-btn">← Back to Project</button>
+        <button onClick={() => navigate("project-detail", { projectId })} className="back-btn">Back to Project</button>
         <div className="header-titles">
           <h1>Configure Dataset</h1>
           <p>Progressive generation profile for {industry}.</p>
@@ -250,6 +273,18 @@ export default function NewDatasetPage({ navigate, params }) {
                     {dim}
                   </button>
                 ))}
+              </div>
+
+              {/* --- NEW: Add custom dimension input UI --- */}
+              <div className="add-member-row" style={{ marginTop: 12, marginBottom: 24 }}>
+                <input
+                  type="text"
+                  placeholder="Add custom dimension (e.g. Segment, Cohort)..."
+                  value={newDimensionName}
+                  onChange={(e) => setNewDimensionName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddDimension(); }}
+                />
+                <button className="btn-outline-small" onClick={handleAddDimension}>Add</button>
               </div>
 
               <div className="subsection-header" style={{ marginTop: 16 }}>
@@ -449,17 +484,23 @@ export default function NewDatasetPage({ navigate, params }) {
                 </div>
               </div>
 
-              <div className="generation-summary">
-                <h4 className="section-subtitle">Generation Summary</h4>
-                <div className="summary-grid">
-                  <div className="summary-item"><span className="summary-label">Name:</span> <strong>{formData.name}</strong></div>
-                  <div className="summary-item"><span className="summary-label">Years:</span> <strong>{formData.startYear} – {parseInt(formData.startYear) + parseInt(formData.numYears) - 1}</strong></div>
-                  <div className="summary-item"><span className="summary-label">Dimensions:</span> <strong>{activeDimensions.join(', ') || 'None'}</strong></div>
-                  <div className="summary-item"><span className="summary-label">Scenarios:</span> <strong>{selectedScenarios.join(', ') || 'None'}</strong></div>
-                  <div className="summary-item"><span className="summary-label">Accounts:</span> <strong>{selectedAccounts.length}</strong></div>
-                  <div className="summary-item"><span className="summary-label">Products:</span> <strong>{(selectedMembers.Product || []).length}</strong></div>
-                  <div className="summary-item"><span className="summary-label">Regions:</span> <strong>{(selectedMembers.Region || []).length}</strong></div>
-                  <div className="summary-item"><span className="summary-label">Channels:</span> <strong>{(selectedMembers.Channel || []).length}</strong></div>
+              <div style={{ marginTop: "24px", padding: "20px", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                <h4 style={{ margin: "0 0 16px 0", fontSize: "14px", fontWeight: "800", color: "#334155", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Generation Summary
+                </h4>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {renderSummaryRow("Name:", formData.name)}
+                  {renderSummaryRow("Years:", `${formData.startYear} – ${parseInt(formData.startYear) + parseInt(formData.numYears) - 1}`)}
+                  {renderSummaryRow("Scenarios:", selectedScenarios.join(', ') || 'None')}
+                  {renderSummaryRow("Accounts:", selectedAccounts.length)}
+                  
+                  {/* --- CHANGED: Dynamically render all dimensions here! --- */}
+                  {activeDimensions.length === 0 && renderSummaryRow("Dimensions:", "None", true)}
+                  {activeDimensions.map((dim, idx) => (
+                    <React.Fragment key={dim}>
+                      {renderSummaryRow(`${dim}s:`, (selectedMembers[dim] || []).length, idx === activeDimensions.length - 1)}
+                    </React.Fragment>
+                  ))}
                 </div>
               </div>
 

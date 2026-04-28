@@ -1,4 +1,36 @@
 /* --- GLOBAL LAYOUT --- */
+:root {
+  /* Surfaces - Cool Slate Backgrounds */
+  --c-bg: #f8fafc;
+  --c-bg-alt: #f1f5f9;
+  --c-surface: #FFFFFF;
+  --c-surface-soft: #f8fafc;
+
+  /* Primary — Enterprise Red (Changes all primary buttons) */
+  --c-primary: #e11d48;
+  --c-primary-hover: #be123c;
+  --c-primary-light: #ffe4e6;
+  --c-primary-soft: #fff1f2;
+  --c-primary-border: #fecdd3;
+
+  /* Secondary — Crisp Blue (Replaces the old coral/pink accents) */
+  --c-coral: #3b82f6;
+  --c-coral-hover: #2563eb;
+  --c-coral-light: #eff6ff;
+  --c-coral-border: #bfdbfe;
+
+  /* Text - Dark Slates */
+  --c-text: #0f172a;
+  --c-text-soft: #334155;
+  --c-text-muted: #64748b;
+
+  /* Borders - Clean Greys */
+  --c-border: #e2e8f0;
+  --c-border-soft: #f1f5f9;
+  --c-border-strong: #cbd5e1;
+
+  /* ... keep your existing --shadow and --t variables below this! ... */
+}
 .page-wrapper {
   display: flex;
   flex-direction: column;

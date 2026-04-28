@@ -424,3 +424,20 @@ def delete_dataset(project_id: int, dataset_id: int, db: Session = Depends(get_d
             pass 
         
     return {"deleted": dataset_id}
+@app.get("/api/projects/{project_id}/datasets/{dataset_id}/download-all")
+def download_all_files(project_id: int, dataset_id: int, db: Session = Depends(get_db)):
+    ds_dir = DATA_ROOT / str(project_id) / str(dataset_id)
+    if not ds_dir.exists():
+        raise HTTPException(status_code=404, detail="Dataset folder not found")
+    
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for file_path in ds_dir.glob("*.csv"):
+            zip_file.write(file_path, file_path.name)
+    
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        iter([zip_buffer.getvalue()]),
+        media_type="application/x-zip-compressed",
+        headers={"Content-Disposition": f"attachment; filename=dataset_{dataset_id}_files.zip"}
+    )
