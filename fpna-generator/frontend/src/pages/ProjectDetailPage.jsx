@@ -14,8 +14,9 @@ export default function ProjectDetailPage({ navigate, params }) {
   // Search & sort state
   const [searchQuery, setSearchQuery] = useState("");
   const [sortParam, setSortParam] = useState("date-desc");
+  const [statusFilter, setStatusFilter] = useState("All");
 
-  // File-level search/sort
+  // File-level search/sort within an expanded dataset
   const [fileSearch, setFileSearch] = useState("");
   const [fileSort, setFileSort] = useState("name-asc");
 
@@ -58,16 +59,6 @@ export default function ProjectDetailPage({ navigate, params }) {
     }
   };
 
-  const handleDownloadSingle = (datasetId, fileName) => {
-    window.location.href = `${API_BASE}/projects/${projectId}/datasets/${datasetId}/download?file=${fileName}`;
-  };
-
-  // NEW: Download All Files as ZIP
-  const handleDownloadAll = (e, datasetId) => {
-    e.stopPropagation();
-    window.location.href = `${API_BASE}/projects/${projectId}/datasets/${datasetId}/download-all`;
-  };
-
   const getFileMeta = (filename) => {
     if (filename.includes('fact')) return { tag: 'FACT', desc: 'Full dataset fact table' };
     if (filename.includes('dim_time')) return { tag: 'DIM', desc: 'Time definitions' };
@@ -77,12 +68,25 @@ export default function ProjectDetailPage({ navigate, params }) {
     return { tag: 'CSV', desc: 'Data file' };
   };
 
+  const handleDownloadSingle = (datasetId, fileName) => {
+    window.location.href = `${API_BASE}/projects/${projectId}/datasets/${datasetId}/download?file=${fileName}`;
+  };
+
+  const handleDownloadAll = (e, datasetId) => {
+    e.stopPropagation();
+    window.location.href = `${API_BASE}/projects/${projectId}/datasets/${datasetId}/download-all`;
+  };
+
+  // === Filter + sort datasets ===
   const filteredDatasets = useMemo(() => {
     return datasets.filter(d => {
       const q = searchQuery.toLowerCase();
-      return !q || (d.name || "").toLowerCase().includes(q);
+      const nameMatch = (d.name || "").toLowerCase().includes(q);
+      const matchesSearch = !q || nameMatch;
+      const matchesStatus = statusFilter === "All" || (d.status || "").toLowerCase() === statusFilter.toLowerCase();
+      return matchesSearch && matchesStatus;
     });
-  }, [datasets, searchQuery]);
+  }, [datasets, searchQuery, statusFilter]);
 
   const sortedDatasets = useMemo(() => {
     return [...filteredDatasets].sort((a, b) => {
@@ -97,6 +101,7 @@ export default function ProjectDetailPage({ navigate, params }) {
     });
   }, [filteredDatasets, sortParam]);
 
+  // === Quick Slice Modal ===
   const openAdvancedFilter = async (datasetId, fileName) => {
     try {
       const res = await fetch(`${API_BASE}/projects/${projectId}/datasets/${datasetId}/files/${fileName}/advanced-schema`);
@@ -147,6 +152,7 @@ export default function ProjectDetailPage({ navigate, params }) {
 
   if (loading) return <div className="loading-container">Loading project...</div>;
 
+  const allStatuses = ["All", ...new Set(datasets.map(d => (d.status || "").toUpperCase()).filter(Boolean))];
   const filteredAdvSchema = advModal.schema.filter(s => String(s.column).toLowerCase().includes(advColSearch.toLowerCase()));
 
   return (
@@ -181,6 +187,15 @@ export default function ProjectDetailPage({ navigate, params }) {
               />
               {searchQuery && <button className="search-clear" onClick={() => setSearchQuery("")}>Clear</button>}
             </div>
+            <div className="filter-group">
+              {allStatuses.map(s => (
+                <button key={s}
+                  className={`filter-pill ${statusFilter === s ? 'active' : ''}`}
+                  onClick={() => setStatusFilter(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="toolbar-right">
             <div className="sort-group">
@@ -210,7 +225,7 @@ export default function ProjectDetailPage({ navigate, params }) {
         ) : sortedDatasets.length === 0 ? (
           <div className="empty-state">
             <strong>No datasets match your filters.</strong>
-            <span>Adjust the search.</span>
+            <span>Adjust the search or status filter.</span>
           </div>
         ) : (
           <div className="dataset-list">
@@ -237,6 +252,7 @@ export default function ProjectDetailPage({ navigate, params }) {
                     </div>
 
                     <div className="ds-controls">
+                      <span className={`status-badge ${(ds.status || "").toLowerCase()}`}>{(ds.status || "").toUpperCase()}</span>
                       <button
                         className="btn-link"
                         onClick={(e) => { e.stopPropagation(); toggleDataset(ds.id); }}>
@@ -264,6 +280,16 @@ export default function ProjectDetailPage({ navigate, params }) {
                         <div className="expanded-actions">
                           <button className="btn-outline-small" onClick={() => setParamsModal({ isOpen: true, params: p })}>
                             View Parameters
+                          </button>
+                          {/* UPDATED: Configure & Recompute now opens the NewDatasetPage */}
+                          <button 
+                            className="btn-outline-small" 
+                            onClick={(e) => { 
+                              e.preventDefault(); 
+                              navigate("new-dataset", { projectId: project?.id || projectId, datasetId: ds.id }); 
+                            }}
+                          >
+                            Configure & Recompute
                           </button>
                         </div>
                       </div>

@@ -202,3 +202,34 @@
 .member-chip.selected { background: var(--c-primary); border-color: var(--c-primary); color: #fff; box-shadow: 0 2px 6px rgba(225, 29, 72, 0.25); }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 18px 26px; border-top: 1px solid var(--c-border); background: var(--c-bg); }
+
+/* --- RECOMPUTE MODAL FORM --- */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+.form-group label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--c-text-soft, #4F5E70);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.form-group input {
+  padding: 10px 12px;
+  border: 1px solid var(--c-border-strong, #cbd5e1);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text, #0f172a);
+  outline: none;
+  background: var(--c-surface, #FFFFFF);
+  transition: all var(--t-fast, 0.15s);
+  font-family: inherit;
+}
+.form-group input:focus {
+  border-color: var(--c-primary, #e11d48);
+  box-shadow: var(--shadow-glow, 0 0 0 4px rgba(225, 29, 72, 0.12));
+}
