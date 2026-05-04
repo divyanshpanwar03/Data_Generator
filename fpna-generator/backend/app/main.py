@@ -35,7 +35,7 @@ import io
 import zipfile
 import pandas as pd
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Dict, List
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, StreamingResponse
@@ -57,6 +57,92 @@ def get_db():
     finally:
         db.close()
 
+# --- NEW CODE LOGIC: Auto-sync DB to Files ---
+def _sync_template_to_file(db_template: models.Template):
+    """Automatically generates the physical JSON file required by FPnAGenerator."""
+    TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    safe_industry_key = db_template.industry_key.lower()
+    file_path = TEMPLATES_DIR / f"{safe_industry_key}.json"
+    
+    # Force delete the old broken file so Windows doesn't cache it
+    if file_path.exists():
+        try:
+            file_path.unlink()
+        except Exception:
+            pass
+            
+    # Safely get the user's custom dimensions
+    custom_dims = db_template.available_dimensions or {}
+    
+    # Build the comprehensive template data
+    template_data = {
+        "industry": safe_industry_key,
+        "label": db_template.label,
+        "description": db_template.description,
+        
+        "available_dimensions": {
+            "product": custom_dims.get("product", ["Standard", "Premium"]),
+            "region": custom_dims.get("region", ["North America", "EMEA"]),
+            "channel": custom_dims.get("channel", ["Direct Sales", "Partner"]),
+            "scenario": ["Base Scenario", "Optimistic", "Pessimistic"]
+        },
+        
+        "defaults": {
+            "base_price": 850.00,
+            "base_units_per_month": 3200,
+            "cogs_pct": 0.18,
+            "marketing_pct_revenue": 0.22,
+            "other_opex_pct_revenue": 0.35,
+            "depreciation_monthly": 95000,
+            "interest_monthly": 42000,
+            "tax_rate": 0.21,
+            "capacity_max_units": 15000,
+            "price_elasticity": -0.7,
+            "marketing_lift_factor": 0.9,
+            "sentiment_lift_factor": 0.5,
+            "fx_cogs_passthrough": 0.20,
+            "fx_price_passthrough": 0.10,
+            "inflation_cogs_passthrough": 0.45,
+            "inflation_price_passthrough": 0.20
+        },
+        
+        # CRITICAL FIX: Hardcode these arrays/floats so the generator math never crashes!
+        "seasonality_profiles": {
+            "flat": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            "enterprise_cycles": [0.70, 0.85, 1.05, 1.10, 1.05, 1.00, 0.80, 0.75, 1.00, 1.15, 1.25, 1.30]
+        },
+        
+        "inflation_curve_presets": {
+            "low": 0.015,
+            "medium": 0.03,
+            "high": 0.055,
+            "hyperflation": 0.12
+        },
+        
+        "available_accounts": {
+            "financial": ["units", "price", "revenue", "cogs", "gross_profit", "marketing_expense", "other_opex", "ebitda", "depreciation", "ebit", "interest", "taxes", "net_income"],
+            "statistical": ["seasonality_index", "sentiment_index", "fx_rate", "inflation_index", "promo_depth", "capacity_utilization", "stockout_flag"]
+        },
+        
+        "fx_base_currency": "USD",
+        "regional_fx": {
+            "North America": 1.00,
+            "EMEA": 1.08,
+            "APAC": 0.74,
+            "LATAM": 0.19
+        }
+    }
+    
+    # Write the fresh, mathematically sound file
+    with open(file_path, "w") as f:
+        json.dump(template_data, f, indent=4)
+    
+    # 4. Write the fresh, valid file
+    with open(file_path, "w") as f:
+        json.dump(template_data, f, indent=4)
+
+# --- PYDANTIC SCHEMAS ---
 class ProjectCreate(BaseModel):
     name: str
     industry: str
@@ -113,32 +199,137 @@ class DatasetRequest(BaseModel):
     random_seed: int = Field(default=42, ge=0)
     custom_dimensions: dict = Field(default_factory=dict)
 
+class TemplateCreate(BaseModel):
+    industry: str
+    label: str
+    description: str
+    available_dimensions: Dict[str, List[str]]
+    seasonality_profiles: Dict[str, Any]
+    inflation_presets: Dict[str, Any]
+
+# --- TEMPLATE ROUTES ---
+@app.post("/api/templates")
+def create_template(template: TemplateCreate, db: Session = Depends(get_db)):
+    existing = db.query(models.Template).filter(models.Template.industry_key == template.industry).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="A template with this unique key already exists.")
+
+    new_template = models.Template(
+        industry_key=template.industry,
+        label=template.label,
+        description=template.description,
+        available_dimensions=template.available_dimensions,
+        seasonality_profiles=template.seasonality_profiles,
+        inflation_presets=template.inflation_presets
+    )
+    
+    db.add(new_template)
+    db.commit()
+    db.refresh(new_template)
+    
+    _sync_template_to_file(new_template) # Auto-generate file
+    return {"status": "success", "id": new_template.id}
+
+@app.put("/api/templates/{industry}")
+def update_template(industry: str, template: TemplateCreate, db: Session = Depends(get_db)):
+    db_template = db.query(models.Template).filter(models.Template.industry_key == industry).first()
+    
+    # If it's a hardcoded file template, we convert it to a DB template so you can edit it!
+    if not db_template:
+        db_template = models.Template(
+            industry_key=industry,
+            seasonality_profiles={"flat": {}},
+            inflation_presets={"medium": {}}
+        )
+        db.add(db_template)
+
+    db_template.label = template.label
+    db_template.description = template.description
+    
+    current_dims = db_template.available_dimensions or {}
+    current_dims["product"] = template.available_dimensions.get("product", [])
+    current_dims["region"] = template.available_dimensions.get("region", [])
+    db_template.available_dimensions = current_dims
+    
+    db.commit()
+    _sync_template_to_file(db_template) # Auto-update file
+    
+    return {"status": "success", "message": "Template updated"}
+
+@app.delete("/api/templates/{industry}")
+def delete_template(industry: str, db: Session = Depends(get_db)):
+    db_template = db.query(models.Template).filter(models.Template.industry_key == industry).first()
+    if db_template:
+        db.delete(db_template)
+        db.commit()
+        
+    file_path = TEMPLATES_DIR / f"{industry}.json"
+    if file_path.exists():
+        file_path.unlink() # Auto-delete file
+        
+    return {"status": "success", "message": "Template deleted"}
+
 @app.get("/api/templates")
-def list_templates() -> list[dict]:
+def list_templates(db: Session = Depends(get_db)) -> list[dict]:
     result = []
-    if not TEMPLATES_DIR.exists(): return result
-    for f in TEMPLATES_DIR.glob("*.json"):
-        with open(f) as fp:
-            t = json.load(fp)
+    
+    # 1. Fetch File-based templates (CPG, Retail, SaaS)
+    if TEMPLATES_DIR.exists():
+        for f in TEMPLATES_DIR.glob("*.json"):
+            try:
+                with open(f) as fp:
+                    t = json.load(fp)
+                result.append({
+                    "industry": t.get("industry", "Unknown"),
+                    "label": t.get("label", "Unknown"),
+                    "description": t.get("description", ""),
+                    "seasonality_profiles": list(t.get("seasonality_profiles", {}).keys()),
+                    "available_dimensions": t.get("available_dimensions", {}),
+                    "available_accounts": t.get("available_accounts", []),
+                    "inflation_presets": list(t.get("inflation_curve_presets", {}).keys()),
+                })
+            except Exception:
+                pass
+                
+    # 2. Fetch DB-based custom templates
+    db_templates = db.query(models.Template).all()
+    for t in db_templates:
+        # Prevent duplicates if it was synced to a file
+        if any(r["industry"] == t.industry_key for r in result): continue
+        
         result.append({
-            "industry": t.get("industry", "Unknown"),
-            "label": t.get("label", "Unknown"),
-            "description": t.get("description", ""),
-            "seasonality_profiles": list(t.get("seasonality_profiles", {}).keys()),
-            "available_dimensions": t.get("available_dimensions", {}),
-            "available_accounts": t.get("available_accounts", []),
-            "inflation_presets": list(t.get("inflation_curve_presets", {}).keys()),
+            "industry": t.industry_key,
+            "label": t.label,
+            "description": t.description,
+            "seasonality_profiles": list((t.seasonality_profiles or {}).keys()),
+            "available_dimensions": t.available_dimensions or {},
+            "available_accounts": [],
+            "inflation_presets": list((t.inflation_presets or {}).keys()),
         })
+        
     return result
 
 @app.get("/api/templates/{industry}")
-def get_template(industry: str) -> dict:
+def get_template(industry: str, db: Session = Depends(get_db)) -> dict:
+    db_template = db.query(models.Template).filter(models.Template.industry_key == industry).first()
+    if db_template:
+        return {
+            "industry": db_template.industry_key,
+            "label": db_template.label,
+            "description": db_template.description,
+            "seasonality_profiles": db_template.seasonality_profiles or {"flat": {}},
+            "available_dimensions": db_template.available_dimensions or {"product": [], "region": []},
+            "available_accounts": [],
+            "inflation_presets": db_template.inflation_presets or {"medium": {}}
+        }
+        
     path = TEMPLATES_DIR / f"{industry}.json"
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"Template '{industry}' not found in {TEMPLATES_DIR}")
+        raise HTTPException(status_code=404, detail=f"Template '{industry}' not found")
     with open(path) as f:
         return json.load(f)
 
+# --- PROJECT & DATASET ROUTES ---
 @app.post("/api/projects", response_model=ProjectResponse, status_code=201)
 def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
     ind_name = body.industry.lower()
@@ -189,6 +380,16 @@ def create_dataset(project_id: int, body: DatasetRequest, db: Session = Depends(
     db_project = db.query(models.Project).options(selectinload(models.Project.industry)).filter(models.Project.id == project_id).first()
     if not db_project: raise HTTPException(status_code=404, detail="Project not found")
 
+    # --- CODE LOGIC FALLBACK ---
+    # If the generator requires the file but it was somehow deleted, auto-recreate it!
+    industry_name = db_project.industry.name
+    template_file_path = TEMPLATES_DIR / f"{industry_name}.json"
+    if not template_file_path.exists():
+        db_template = db.query(models.Template).filter(models.Template.industry_key == industry_name).first()
+        if db_template:
+            _sync_template_to_file(db_template)
+            if not template_file_path.exists():
+                raise HTTPException(status_code=400, detail=f"Base template file {industry_name}.json is missing.")
     db_dataset = models.Dataset(project_id=project_id, name=body.name, status="Generating...")
     db.add(db_dataset)
     db.commit()
@@ -216,10 +417,29 @@ def create_dataset(project_id: int, body: DatasetRequest, db: Session = Depends(
         raise HTTPException(status_code=500, detail=f"Generator error: {exc}") from exc
 
     row_count = 0
-    fact_path = Path(files_written.get("fact_sales", ""))
-    if fact_path.exists():
-        with open(fact_path) as f:
-            row_count = sum(1 for _ in f) - 1 
+    fact_paths: list[Path] = []
+
+    for key, path_str in (files_written or {}).items():
+        if not path_str:
+            continue
+        p = Path(path_str)
+        name = p.name.lower()
+        key_l = str(key).lower()
+        if (key_l.startswith("fact_") or name.startswith("fact_")) and name.endswith(".csv"):
+            fact_paths.append(p)
+
+    if not fact_paths and output_dir.exists():
+        fact_paths = list(output_dir.glob("fact_*.csv"))
+
+    for fp in fact_paths:
+        if fp.exists():
+            try:
+                with open(fp) as f:
+                    lines = sum(1 for _ in f)
+                if lines > 0:
+                    row_count += max(0, lines - 1) 
+            except Exception as e:
+                print(f"Warning: could not count rows in {fp}: {e}")
 
     if body.custom_dimensions:
         for dim_name, members in body.custom_dimensions.items():
@@ -300,6 +520,24 @@ def list_datasets(project_id: int, db: Session = Depends(get_db)):
     for ds in db_datasets:
         result.append({ "id": ds.id, "name": ds.name, "status": ds.status, "total_row_count": ds.total_row_count, "created_at": ds.created_at, "files": [f.file_path for f in ds.files], "params": params_dict })
     return result
+
+@app.get("/api/projects/{project_id}/datasets/{dataset_id}/download-all")
+def download_all_files(project_id: int, dataset_id: int, db: Session = Depends(get_db)):
+    ds_dir = DATA_ROOT / str(project_id) / str(dataset_id)
+    if not ds_dir.exists():
+        raise HTTPException(status_code=404, detail="Dataset folder not found")
+    
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for file_path in ds_dir.glob("*.csv"):
+            zip_file.write(file_path, file_path.name)
+    
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        iter([zip_buffer.getvalue()]),
+        media_type="application/x-zip-compressed",
+        headers={"Content-Disposition": f"attachment; filename=dataset_{dataset_id}_files.zip"}
+    )
 
 @app.get("/api/projects/{project_id}/datasets/{dataset_id}/download")
 def download_file(project_id: int, dataset_id: int, file: str, db: Session = Depends(get_db)):
@@ -397,47 +635,17 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
 
 @app.delete("/api/projects/{project_id}/datasets/{dataset_id}")
 def delete_dataset(project_id: int, dataset_id: int, db: Session = Depends(get_db)):
-    # 1. Find the dataset
     db_dataset = db.query(models.Dataset).filter(models.Dataset.id == dataset_id, models.Dataset.project_id == project_id).first()
-    
-    if not db_dataset: 
-        raise HTTPException(status_code=404, detail="Dataset not found in database.")
-    
+    if not db_dataset: raise HTTPException(status_code=404, detail="Dataset not found in database.")
     try:
-        # 2. CRITICAL FIX: Explicitly delete child records first to prevent SQLite constraint crashes!
         db.query(models.DatasetFile).filter(models.DatasetFile.dataset_id == dataset_id).delete()
-        
-        # 3. Now it is safe to delete the parent dataset
         db.delete(db_dataset)
         db.commit()
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    
-    # 4. Safely wipe the physical CSV files from the hard drive
     ds_dir = DATA_ROOT / str(project_id) / str(dataset_id)
     if ds_dir.exists():
-        try:
-            shutil.rmtree(ds_dir)
-        except Exception as e:
-            print(f"Warning: OS lock prevented physical folder deletion: {e}")
-            pass 
-        
+        try: shutil.rmtree(ds_dir)
+        except Exception: pass 
     return {"deleted": dataset_id}
-@app.get("/api/projects/{project_id}/datasets/{dataset_id}/download-all")
-def download_all_files(project_id: int, dataset_id: int, db: Session = Depends(get_db)):
-    ds_dir = DATA_ROOT / str(project_id) / str(dataset_id)
-    if not ds_dir.exists():
-        raise HTTPException(status_code=404, detail="Dataset folder not found")
-    
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for file_path in ds_dir.glob("*.csv"):
-            zip_file.write(file_path, file_path.name)
-    
-    zip_buffer.seek(0)
-    return StreamingResponse(
-        iter([zip_buffer.getvalue()]),
-        media_type="application/x-zip-compressed",
-        headers={"Content-Disposition": f"attachment; filename=dataset_{dataset_id}_files.zip"}
-    )

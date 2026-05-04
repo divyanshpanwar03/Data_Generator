@@ -3,7 +3,9 @@ import ProjectsPage from "./pages/ProjectsPage";
 import NewProjectPage from "./pages/NewProjectPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
 import NewDatasetPage from "./pages/NewDatasetPage";
+import TemplatesPage from "./pages/TemplatesPage"; // <-- Import added!
 import Layout from "./components/Layout";
+
 export default function App() {
   const [route, setRoute] = useState("projects");
   const [params, setParams] = useState({});
@@ -20,18 +22,10 @@ export default function App() {
       case "projects": return <ProjectsPage navigate={navigate} />;
       case "project-detail": return <ProjectDetailPage navigate={navigate} params={params} />;
       case "new-dataset": return <NewDatasetPage navigate={navigate} params={params} />;
-      case "new-project": return <NewProjectPage navigate={navigate} />; // <-- Wired up New Project!
+      case "new-project": return <NewProjectPage navigate={navigate} />;
 
-      // 2. Sidebar Navigation Placeholders
-      case "templates": 
-        return (
-          <div style={{ padding: "40px 24px", maxWidth: 800 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 800, color: "#292524", letterSpacing: "-0.8px", marginBottom: 12 }}>Templates</h1>
-            <p style={{ color: "#78716c", fontSize: 16, lineHeight: 1.6, padding: "24px", background: "#ffffff", border: "1px dashed #d6d3d1", borderRadius: 12 }}>
-              Industry template management and overrides will go here. You can build out this page later to edit default elasticity, seasonality, and standard chart of accounts.
-            </p>
-          </div>
-        );
+      // 2. Templates Route (Now wired up!)
+      case "templates": return <TemplatesPage navigate={navigate} />;
         
       case "settings": 
         return (

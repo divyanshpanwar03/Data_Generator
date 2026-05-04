@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -17,9 +17,17 @@ class Industry(Base):
 class Template(Base):
     __tablename__ = "templates"
     id = Column(Integer, primary_key=True, index=True)
-    industry_id = Column(Integer, ForeignKey("industries.id"))
-    name = Column(String)
+    industry_id = Column(Integer, ForeignKey("industries.id"), nullable=True)
+    
+    # New Columns for custom templates
+    industry_key = Column(String, unique=True, index=True)
+    label = Column(String)
+    description = Column(Text, nullable=True)
     version = Column(String, default="1.0")
+    
+    available_dimensions = Column(JSON)
+    seasonality_profiles = Column(JSON)
+    inflation_presets = Column(JSON)
     
     industry = relationship("Industry", back_populates="templates")
     projects = relationship("Project", back_populates="template")
