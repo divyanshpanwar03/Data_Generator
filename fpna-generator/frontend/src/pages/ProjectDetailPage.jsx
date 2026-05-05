@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { api } from "../hooks/api";
 import "./ProjectDetailPage.css";
-
+import DatasetDashboard from './DatasetDashboard';
 const API_BASE = "http://localhost:8000/api";
 
 export default function ProjectDetailPage({ navigate, params }) {
@@ -11,6 +11,8 @@ export default function ProjectDetailPage({ navigate, params }) {
   const [loading, setLoading] = useState(true);
   const [expandedDataset, setExpandedDataset] = useState(null);
 
+  const [codeModal, setCodeModal] = useState({ isOpen: false, code: "" });
+const [savingCode, setSavingCode] = useState(false);
   // Search & sort state
   const [searchQuery, setSearchQuery] = useState("");
   const [sortParam, setSortParam] = useState("date-desc");
@@ -20,9 +22,13 @@ export default function ProjectDetailPage({ navigate, params }) {
   const [fileSearch, setFileSearch] = useState("");
   const [fileSort, setFileSort] = useState("name-asc");
 
+  // Modals state
   const [paramsModal, setParamsModal] = useState({ isOpen: false, params: {} });
   const [advModal, setAdvModal] = useState({ isOpen: false, datasetId: null, fileName: null, schema: [], selectedColumns: [], filters: {} });
   const [advColSearch, setAdvColSearch] = useState("");
+  
+  // NEW: State to track which dataset dashboard is currently open
+  const [activeDashboardDatasetId, setActiveDashboardDatasetId] = useState(null);
 
   const fetchDatasets = () => {
     fetch(`${API_BASE}/projects/${projectId}/datasets`)
@@ -59,6 +65,31 @@ export default function ProjectDetailPage({ navigate, params }) {
     }
   };
 
+  const openCodeEditor = async () => {
+     try {
+       const res = await fetch(`${API_BASE}/projects/${projectId}/custom-logic`);
+       const data = await res.json();
+       setCodeModal({ isOpen: true, code: data.code });
+     } catch (err) {
+       console.error("Failed to load custom logic");
+     }
+   };
+
+   const saveCustomCode = async () => {
+     setSavingCode(true);
+     try {
+       await fetch(`${API_BASE}/projects/${projectId}/custom-logic`, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ code: codeModal.code })
+       });
+       setCodeModal(p => ({ ...p, isOpen: false }));
+     } catch (err) {
+       alert("Failed to save custom logic");
+     } finally {
+       setSavingCode(false);
+     }
+   };
   const getFileMeta = (filename) => {
     if (filename.includes('fact')) return { tag: 'FACT', desc: 'Full dataset fact table' };
     if (filename.includes('dim_time')) return { tag: 'DIM', desc: 'Time definitions' };
@@ -168,9 +199,14 @@ export default function ProjectDetailPage({ navigate, params }) {
               </span>
             )}
           </div>
-          <button className="btn-primary" onClick={(e) => { e.preventDefault(); navigate("new-dataset", { projectId: project?.id || projectId }); }}>
-            Generate Dataset
-          </button>
+          <div className="pd-header-flex" style={{ gap: '12px' }}>
+            <button className="btn-outline" onClick={openCodeEditor} style={{ borderColor: '#818cf8', color: '#818cf8', fontWeight: 600 }}>
+              {'{ }'} Edit Core Logic
+            </button>
+            <button className="btn-primary" onClick={(e) => { e.preventDefault(); navigate("new-dataset", { projectId: project?.id || projectId }); }}>
+              Generate Dataset
+            </button>
+          </div>
         </div>
       </header>
 
@@ -278,10 +314,14 @@ export default function ProjectDetailPage({ navigate, params }) {
                       <div className="expanded-toolbar">
                         <h4 className="section-heading">Generated Files</h4>
                         <div className="expanded-actions">
+                          {/* NEW: View Analytics Dashboard Button */}
+                          <button className="btn-outline-small" style={{ borderColor: '#e11d48', color: '#e11d48' }} onClick={() => setActiveDashboardDatasetId(ds.id)}>
+                            📊 View Analytics
+                          </button>
+
                           <button className="btn-outline-small" onClick={() => setParamsModal({ isOpen: true, params: p })}>
                             View Parameters
                           </button>
-                          {/* UPDATED: Configure & Recompute now opens the NewDatasetPage */}
                           <button 
                             className="btn-outline-small" 
                             onClick={(e) => { 
@@ -492,6 +532,73 @@ export default function ProjectDetailPage({ navigate, params }) {
             <div className="modal-actions">
               <button className="btn-outline-small" onClick={() => handleDownloadSingle(advModal.datasetId, advModal.fileName)}>Download Raw File</button>
               <button className="btn-primary" onClick={executeAdvancedModalDownload}>Export Custom CSV</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === DASHBOARD MODAL === */}
+      {activeDashboardDatasetId && (
+        <div className="modal-overlay" onClick={() => setActiveDashboardDatasetId(null)}>
+          <div 
+            className="modal-box" 
+            onClick={e => e.stopPropagation()} 
+            style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}
+          >
+            <div className="modal-header">
+              <div>
+                <h2>Dataset Analytics</h2>
+                <p className="modal-desc">Visualizing your synthetic FP&A generation.</p>
+              </div>
+              <button className="modal-close-btn" onClick={() => setActiveDashboardDatasetId(null)}>×</button>
+            </div>
+            
+            <div className="modal-body" style={{ padding: '0 24px 24px 24px' }}>
+              {/* Pass the project and dataset IDs down to the component to fetch the data */}
+              <DatasetDashboard 
+                projectId={projectId || project?.id} 
+                datasetId={activeDashboardDatasetId} 
+              />
+            </div>
+          </div>
+        </div>
+      )}
+{/* === CUSTOM CODE EDITOR MODAL === */}
+      {codeModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setCodeModal({ isOpen: false, code: "" })}>
+          {/* UPDATED: Increased maxWidth to 1200px and width to 95% */}
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '1200px', width: '95%' }}>
+            <div className="modal-header">
+              <div>
+                <h2>{'{ }'} Project Generation Logic</h2>
+                <p className="modal-desc">
+                  Write custom Python logic using Pandas. The base dataset is loaded as a DataFrame named <code>df</code>. 
+                  This runs immediately after generation.
+                </p>
+              </div>
+              <button className="modal-close-btn" onClick={() => setCodeModal({ isOpen: false, code: "" })}>×</button>
+            </div>
+            
+            <div className="modal-body" style={{ padding: '0 24px 24px' }}>
+              <textarea
+                value={codeModal.code}
+                onChange={(e) => setCodeModal({ ...codeModal, code: e.target.value })}
+                spellCheck="false"
+                style={{
+                  // UPDATED: Changed height from 400px to 65vh (65% of screen height)
+                  width: '100%', height: '65vh', backgroundColor: '#1e293b', color: '#f8fafc',
+                  fontFamily: '"Fira Code", "Courier New", monospace', fontSize: '14px',
+                  padding: '16px', borderRadius: '8px', border: '1px solid #475569',
+                  lineHeight: '1.5', resize: 'vertical', outline: 'none'
+                }}
+              />
+            </div>
+
+            <div className="modal-actions" style={{ padding: '16px 24px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
+              <button className="btn-outline-small" onClick={() => setCodeModal({ isOpen: false, code: "" })}>Cancel</button>
+              <button className="btn-primary" onClick={saveCustomCode} disabled={savingCode}>
+                {savingCode ? "Saving..." : "Save & Apply to Future Datasets"}
+              </button>
             </div>
           </div>
         </div>

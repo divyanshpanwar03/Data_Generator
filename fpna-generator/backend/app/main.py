@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 import os
 from pathlib import Path
+import numpy as np
+import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
@@ -148,6 +150,10 @@ class ProjectCreate(BaseModel):
     industry: str
     description: Optional[str] = ""
     template_overrides: dict = Field(default_factory=dict)
+# Add this near your other Pydantic models at the top
+class CustomChartRequest(BaseModel):
+    dimension: str
+    metrics: list[str]
 
 class IndustryResp(BaseModel):
     name: str
@@ -380,16 +386,41 @@ def create_dataset(project_id: int, body: DatasetRequest, db: Session = Depends(
     db_project = db.query(models.Project).options(selectinload(models.Project.industry)).filter(models.Project.id == project_id).first()
     if not db_project: raise HTTPException(status_code=404, detail="Project not found")
 
-    # --- CODE LOGIC FALLBACK ---
-    # If the generator requires the file but it was somehow deleted, auto-recreate it!
     industry_name = db_project.industry.name
-    template_file_path = TEMPLATES_DIR / f"{industry_name}.json"
-    if not template_file_path.exists():
-        db_template = db.query(models.Template).filter(models.Template.industry_key == industry_name).first()
-        if db_template:
-            _sync_template_to_file(db_template)
-            if not template_file_path.exists():
-                raise HTTPException(status_code=400, detail=f"Base template file {industry_name}.json is missing.")
+    db_template = db.query(models.Template).filter(models.Template.industry_key == industry_name).first()
+    
+    template_dims = {}
+    
+    if db_template:
+        _sync_template_to_file(db_template) 
+        template_dims = db_template.available_dimensions or {}
+    else:
+        template_file_path = TEMPLATES_DIR / f"{industry_name}.json"
+        if not template_file_path.exists():
+            raise HTTPException(status_code=400, detail=f"Base template file {industry_name}.json is missing.")
+        with open(template_file_path, "r") as f:
+            template_dims = json.load(f).get("available_dimensions", {})
+
+    # --- CRITICAL FIX: Inject missing dimensions ---
+    # If the frontend sends empty arrays, force the generator to use your template's custom dimensions!
+    if not body.products and "product" in template_dims:
+        body.products = template_dims["product"]
+    
+    if not body.regions and "region" in template_dims:
+        body.regions = template_dims["region"]
+        
+    if not body.channels and "channel" in template_dims:
+        body.channels = template_dims["channel"]
+
+    # Force the engine to include the columns
+    if body.products and "product" not in body.dimensions:
+        body.dimensions.append("product")
+    if body.regions and "region" not in body.dimensions:
+        body.dimensions.append("region")
+    if body.channels and "channel" not in body.dimensions:
+        body.dimensions.append("channel")
+
+    # --- Proceed with creating the dataset in DB ---
     db_dataset = models.Dataset(project_id=project_id, name=body.name, status="Generating...")
     db.add(db_dataset)
     db.commit()
@@ -397,6 +428,7 @@ def create_dataset(project_id: int, body: DatasetRequest, db: Session = Depends(
 
     output_dir = DATA_ROOT / str(project_id) / str(db_dataset.id)
 
+    # The GeneratorRequest will now receive your custom products & regions!
     gen_request = GeneratorRequest(
         industry=db_project.industry.name, project_name=db_project.name,
         start_year=body.start_year, num_years=body.num_years,
@@ -407,6 +439,8 @@ def create_dataset(project_id: int, body: DatasetRequest, db: Session = Depends(
         custom_inflation_rate=body.custom_inflation_rate, random_seed=body.random_seed,
         custom_dimensions=body.custom_dimensions, output_dir=str(output_dir),
     )
+    
+    # ... (Keep the rest of your create_dataset try/except block the exact same below this) ...
 
     try:
         generator = FPnAGenerator(gen_request, templates_dir=str(TEMPLATES_DIR))
@@ -415,7 +449,32 @@ def create_dataset(project_id: int, body: DatasetRequest, db: Session = Depends(
         db_dataset.status = "Failed"
         db.commit()
         raise HTTPException(status_code=500, detail=f"Generator error: {exc}") from exc
-
+# --- EXECUTE CUSTOM USER FORMULAS ---
+    # Look for custom code saved to this project
+    custom_logic_param = db.query(models.ProjectParameter).filter_by(project_id=project_id, param_key="custom_python_logic").first()
+    if custom_logic_param and custom_logic_param.param_value.strip():
+        custom_code = custom_logic_param.param_value
+        
+        # Apply it to the generated fact tables
+        for key, path_str in (files_written or {}).items():
+            if path_str and ("fact_" in str(path_str).lower() or "fact_" in str(key).lower()):
+                try:
+                    df = pd.read_csv(path_str)
+                    
+                    # Create a safe local environment with pandas and numpy
+                    import numpy as np
+                    local_vars = {"df": df, "pd": pd, "np": np}
+                    
+                    # Execute the user's custom python script!
+                    exec(custom_code, {}, local_vars)
+                    
+                    # Save the modified DataFrame back to the CSV
+                    local_vars["df"].to_csv(path_str, index=False)
+                    print(f"Successfully applied custom formulas to {path_str}")
+                except Exception as e:
+                    print(f"Error executing custom user code: {e}")
+                    # We print the error but don't crash the generation, 
+                    # so they still get their base dataset!
     row_count = 0
     fact_paths: list[Path] = []
 
@@ -649,3 +708,157 @@ def delete_dataset(project_id: int, dataset_id: int, db: Session = Depends(get_d
         try: shutil.rmtree(ds_dir)
         except Exception: pass 
     return {"deleted": dataset_id}
+
+@app.get("/api/projects/{project_id}/datasets/{dataset_id}/dashboard-stats")
+def get_dashboard_stats(project_id: int, dataset_id: int, db: Session = Depends(get_db)):
+    ds_dir = DATA_ROOT / str(project_id) / str(dataset_id)
+    if not ds_dir.exists():
+        raise HTTPException(status_code=404, detail="Dataset not found")
+        
+    # Find the main fact table (usually starts with fact_ and ends with .csv)
+    fact_files = list(ds_dir.glob("fact_*.csv"))
+    if not fact_files:
+        raise HTTPException(status_code=404, detail="No fact tables generated to analyze.")
+        
+    try:
+        # Read the first fact table
+        df = pd.read_csv(fact_files[0])
+        
+        # Ensure we have a date column to group by
+        date_col = 'date' if 'date' in df.columns else 'Date' if 'Date' in df.columns else None
+        
+        if not date_col:
+            return {"error": "No date column found for time-series analysis."}
+
+        # Convert to datetime and sort
+        df[date_col] = pd.to_datetime(df[date_col])
+        df = df.sort_values(date_col)
+        
+        # 1. TIME SERIES: Group by Month for the main chart
+        # We group by YYYY-MM and sum the financial metrics
+        monthly_df = df.groupby(df[date_col].dt.strftime('%Y-%m')).agg({
+            'revenue': 'sum',
+            'cogs': 'sum',
+            'ebitda': 'sum',
+            'units': 'sum'
+        }).reset_index()
+        
+        # Clean up column names for the frontend
+        monthly_df = monthly_df.rename(columns={date_col: 'month'})
+        
+        # Fill any missing columns with 0s just in case the generator didn't make them
+        for col in ['revenue', 'cogs', 'ebitda', 'units']:
+            if col not in monthly_df.columns:
+                monthly_df[col] = 0
+
+        # 2. DIMENSION MIX: Revenue by Product (if product column exists)
+        product_mix = []
+        prod_col = 'product' if 'product' in df.columns else 'Product' if 'Product' in df.columns else None
+        if prod_col and 'revenue' in df.columns:
+            prod_df = df.groupby(prod_col)['revenue'].sum().reset_index()
+            product_mix = prod_df.rename(columns={prod_col: 'name', 'revenue': 'value'}).to_dict(orient='records')
+
+        # 3. HIGH-LEVEL KPIs
+        kpis = {
+            "total_revenue": float(df['revenue'].sum()) if 'revenue' in df.columns else 0,
+            "total_units": float(df['units'].sum()) if 'units' in df.columns else 0,
+            "avg_margin_pct": float(((df['revenue'].sum() - df['cogs'].sum()) / df['revenue'].sum()) * 100) if 'revenue' in df.columns and 'cogs' in df.columns and df['revenue'].sum() > 0 else 0,
+        }
+
+        # Return the aggregated payload
+        return {
+            "kpis": kpis,
+            "monthly_trend": monthly_df.to_dict(orient='records'),
+            "product_mix": product_mix
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to analyze dataset: {str(e)}")
+    
+# --- CUSTOM CODE INJECTION ROUTES ---
+# --- CUSTOM CODE INJECTION ROUTES ---
+@app.get("/api/projects/{project_id}/custom-logic")
+def get_custom_logic(project_id: int, db: Session = Depends(get_db)):
+    db_param = db.query(models.ProjectParameter).filter_by(project_id=project_id, param_key="custom_python_logic").first()
+    
+    # ---------------------------------------------------------
+    # THE TRANSPARENT WHITE-BOX FORMULA ENGINE
+    # This exposes the exact math to the frontend user so they can edit it!
+    # ---------------------------------------------------------
+    default_code = """# --- CORE FP&A CALCULATION ENGINE ---
+# Modify these formulas to change how your dataset is mathematically generated.
+# The raw dataset is loaded as 'df'.
+
+# 1. Calculate Base Metrics
+# Assuming base_price and base_units are in your JSON template defaults
+df['units'] = df['base_units_per_month'] * df['seasonality_index'] * (1 + df['sentiment_index'])
+df['price'] = df['base_price'] * (1 + df['inflation_index'])
+
+# 2. Calculate Top Line Revenue
+df['revenue'] = df['units'] * df['price']
+
+# 3. Calculate Expenses (Using standard JSON template percentages)
+df['cogs'] = df['revenue'] * 0.18  # Cost of Goods Sold
+df['marketing_expense'] = df['revenue'] * 0.22
+df['other_opex'] = df['revenue'] * 0.35
+
+# 4. Calculate Bottom Line & Margins
+df['gross_profit'] = df['revenue'] - df['cogs']
+df['ebitda'] = df['gross_profit'] - df['marketing_expense'] - df['other_opex']
+
+# 5. Advanced Financials
+df['depreciation'] = 95000  # Hardcoded monthly depreciation
+df['ebit'] = df['ebitda'] - df['depreciation']
+df['interest'] = 42000
+df['taxes'] = (df['ebit'] - df['interest']) * 0.21
+
+# Final Net Income
+df['net_income'] = df['ebit'] - df['interest'] - df['taxes']
+"""
+    
+    # If the user has saved custom logic, return that. Otherwise, return the core formula template.
+    return {"code": db_param.param_value if db_param and db_param.param_value.strip() else default_code}
+
+@app.post("/api/projects/{project_id}/custom-logic")
+def save_custom_logic(project_id: int, body: dict, db: Session = Depends(get_db)):
+    db_param = db.query(models.ProjectParameter).filter_by(project_id=project_id, param_key="custom_python_logic").first()
+    if db_param:
+        db_param.param_value = body.get("code", "")
+    else:
+        db_param = models.ProjectParameter(project_id=project_id, param_key="custom_python_logic", param_value=body.get("code", ""))
+        db.add(db_param)
+    db.commit()
+    return {"status": "success"}
+# --- NEW DYNAMIC CHART BUILDER ROUTE ---
+@app.post("/api/projects/{project_id}/datasets/{dataset_id}/custom-chart")
+def get_custom_chart_data(project_id: int, dataset_id: int, body: CustomChartRequest):
+    ds_dir = DATA_ROOT / str(project_id) / str(dataset_id)
+    fact_files = list(ds_dir.glob("fact_*.csv"))
+    
+    if not fact_files:
+        raise HTTPException(status_code=404, detail="No fact tables found.")
+
+    try:
+        df = pd.read_csv(fact_files[0])
+        dim = body.dimension.lower()
+        
+        # Format dates nicely if they choose month/year
+        if dim == 'month' and 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'])
+            df[dim] = df['date'].dt.strftime('%Y-%m')
+        elif dim not in df.columns:
+            return {"data": []} # Dimension doesn't exist in this dataset
+
+        # Only aggregate metrics that actually exist in the CSV
+        valid_metrics = [m for m in body.metrics if m in df.columns]
+        if not valid_metrics:
+            return {"data": []}
+
+        # Group by the selected dimension and sum the selected metrics
+        grouped = df.groupby(dim)[valid_metrics].sum().reset_index()
+        grouped = grouped.sort_values(dim)
+
+        return {"data": grouped.to_dict(orient='records')}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dynamic chart error: {str(e)}")
