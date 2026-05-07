@@ -1,29 +1,27 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { api } from "../hooks/api";
-import { Card, Btn, Input, SectionHeader, Toast, Spinner } from "../components/UI";
+import { Card, Input, SectionHeader, Toast } from "../components/UI";
 import "./NewProjectPage.css";
 
+// --- TEMPLATE DICTIONARY ---
+// Add any new templates you make right here. The dropdown will map them automatically!
 const INDUSTRY_META = {
-  cpg: { desc: "FMCG manufacturer with retail distribution" },
-  saas: { desc: "Subscription software with recurring revenue" },
-  retail: { desc: "Omnichannel retailer with physical and digital channels" },
+  saas: { name: "SaaS", desc: "Subscription software with recurring revenue" },
+  cpg: { name: "CPG", desc: "FMCG manufacturer with retail distribution" },
+  retail: { name: "Retail", desc: "Omnichannel retailer with physical and digital channels" },
+  healthcare: { name: "Healthcare", desc: "Hospital networks and clinic operations" }
 };
 
-// --- MULTI-SELECT DROPDOWN (Products & Regions) ---
+const PRODUCTS = ["Footwear", "Apparel", "Enterprise", "Pro Plan", "Beauty & Health", "Home & Living", "Accessories"];
+const REGIONS = ["North America", "EMEA", "APAC", "LATAM"];
+const CHANNELS = ["Direct", "Wholesale", "Partner Network", "Self-Serve", "Marketplace"];
+const DIMENSIONS = ["product", "region", "channel", "scenario"];
+
+// --- MULTI-SELECT MODAL (Products, Regions, Channels) ---
 function MultiSelectDropdown({ label, options = [], selected = [], onChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const [maxVisible, setMaxVisible] = useState(3);
 
   const toggleOption = (opt) => {
     if (selected.includes(opt)) {
@@ -46,53 +44,103 @@ function MultiSelectDropdown({ label, options = [], selected = [], onChange }) {
     onChange(selected.filter(x => x !== opt));
   };
 
-  const allOptions = Array.from(new Set([...options, ...selected]));
+  const handleMaxChange = (e) => {
+    const val = parseInt(e.target.value, 10);
+    setMaxVisible(isNaN(val) || val < 0 ? 0 : val);
+  };
+
+  const visibleSelected = selected.slice(0, maxVisible);
+  const hiddenCount = selected.length - maxVisible;
 
   return (
-    <div className="tags-group" ref={dropdownRef} style={{ position: 'relative' }}>
-      <div className="tags-header">
-        <span className="tags-label">{label}</span>
-        <span className="tags-count">{selected.length} item{selected.length !== 1 ? 's' : ''}</span>
-      </div>
-
-      <div className="multi-select-box" onClick={() => setIsOpen(!isOpen)}>
-        <div className="multi-select-chips">
-          {selected.length === 0 && <span className="tags-placeholder">Select or add options...</span>}
-          {selected.map(s => (
-            <div key={s} className="tag-item" onClick={(e) => e.stopPropagation()}>
-              <span>{s}</span>
-              <button type="button" className="tag-remove-btn" onClick={(e) => remove(e, s)}>×</button>
-            </div>
-          ))}
+    <div className="multi-select-container">
+      {/* HEADER WITH LABEL & LIMIT INPUT */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <label className="input-label" style={{ marginBottom: 0, fontWeight: 700, color: '#334155', fontSize: '13px', textTransform: 'uppercase' }}>{label}</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+          <label>Visible limit:</label>
+          <input
+            type="number"
+            min="0"
+            value={maxVisible}
+            onChange={handleMaxChange}
+            onClick={(e) => e.stopPropagation()}
+            className="chip-limit-input"
+          />
         </div>
-        <div className="multi-select-arrow">▼</div>
       </div>
 
+      {/* CHIP BOX */}
+      <div className="multi-select-box" onClick={() => setIsOpen(true)}>
+        <div className="selected-chips">
+          {visibleSelected.map(opt => (
+            <span key={opt} className="chip">
+              {opt}
+              <button className="chip-remove" onClick={(e) => remove(e, opt)}>×</button>
+            </span>
+          ))}
+          
+          {hiddenCount > 0 && (
+            <span
+              className="chip chip-more"
+              onClick={(e) => { e.stopPropagation(); setIsOpen(true); }}
+            >
+              +{hiddenCount} more
+            </span>
+          )}
+          
+          {selected.length === 0 && <span className="placeholder">Select options...</span>}
+        </div>
+        <div className="chevron">✎ Edit</div>
+      </div>
+
+      {/* MODAL WINDOW */}
       {isOpen && (
-        <div className="multi-select-menu">
-          <div className="multi-select-add-row">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={e => setInputValue(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
-              placeholder="Type to add new..."
-              className="multi-select-add-input"
-              autoFocus
-            />
-            <button type="button" onClick={handleAdd} className="multi-select-add-btn">Add</button>
-          </div>
-          <div className="multi-select-options">
-            {allOptions.map(opt => (
-              <label key={opt} className="multi-select-option">
+        <div className="modal-overlay" onClick={() => setIsOpen(false)} style={{ zIndex: 9999 }}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+            
+            <div className="modal-header">
+              <div>
+                <h2>Manage {label}</h2>
+                <p className="modal-desc">Select or add custom items to your generation list.</p>
+              </div>
+              <button className="modal-close-btn" onClick={() => setIsOpen(false)}>×</button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '0 24px 24px' }}>
+              <div className="multi-select-add">
                 <input
-                  type="checkbox"
-                  checked={selected.includes(opt)}
-                  onChange={() => toggleOption(opt)}
+                  type="text"
+                  placeholder="Type custom item and press Add..."
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
                 />
-                {opt}
-              </label>
-            ))}
+                <button type="button" onClick={handleAdd}>Add</button>
+              </div>
+
+              <div className="multi-select-options">
+                {selected.map(opt => (
+                  <label key={opt} className="checkbox-list-item">
+                    <input type="checkbox" checked={true} onChange={() => toggleOption(opt)} />
+                    <span className="checkbox-item-text">{opt}</span>
+                  </label>
+                ))}
+                {options.filter(o => !selected.includes(o)).map(opt => (
+                  <label key={opt} className="checkbox-list-item">
+                    <input type="checkbox" checked={false} onChange={() => toggleOption(opt)} />
+                    <span className="checkbox-item-text">{opt}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="modal-actions" style={{ padding: '16px 24px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
+              <button className="btn-primary" onClick={() => setIsOpen(false)} style={{ width: '100%' }}>
+                Done
+              </button>
+            </div>
+
           </div>
         </div>
       )}
@@ -100,225 +148,139 @@ function MultiSelectDropdown({ label, options = [], selected = [], onChange }) {
   );
 }
 
-// --- DROPDOWN ---
-function SimpleDropdown({ label, value, options = [], onChange }) {
+// --- SIMPLE DROPDOWN ---
+function SimpleDropdown({ label, value, options, onChange }) {
   return (
-    <div className="tags-group">
-      <span className="tags-label">{label}</span>
-      <select
-        className="config-select"
-        value={value}
-        onChange={e => onChange(e.target.value)}
+    <div style={{ marginBottom: '24px' }}>
+      <label className="input-label" style={{ marginBottom: '8px', display: 'block', fontWeight: 700, color: '#334155', fontSize: '13px', textTransform: 'uppercase' }}>{label}</label>
+      <select 
+        value={value} 
+        onChange={(e) => onChange(e.target.value)}
+        className="simple-dropdown-select"
       >
-        {options.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
+        {options.map(o => <option key={o} value={o}>{o.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
       </select>
     </div>
   );
 }
 
 export default function NewProjectPage({ navigate }) {
-  const [templates, setTemplates] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    name: "New FP&A Model",
+    industry: "saas",
+    dimensions: [...DIMENSIONS],
+    products: ["Enterprise", "Pro Plan"],
+    regions: ["North America", "EMEA"],
+    channels: ["Direct", "Partner Network"],
+  });
+
+  const [overrides, setOverrides] = useState({
+    seasonality: "moderate",
+    inflation: "medium"
+  });
+
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", industry: "", description: "" });
-
-  const [templateOptions, setTemplateOptions] = useState({ products: [], regions: [], seasonality: [], inflation: [] });
-  const [overrides, setOverrides] = useState({ products: [], regions: [], seasonality: "flat", inflation: "medium" });
   const [toast, setToast] = useState(null);
-  const [templateSearch, setTemplateSearch] = useState("");
-  const [templateSort, setTemplateSort] = useState("name-asc");
 
-  useEffect(() => {
-    api.getTemplates()
-      .then(t => { setTemplates(t); })
-      .catch(e => showToast(e.message, "error"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleSelectIndustry = async (indKey) => {
-    setForm(f => ({ ...f, industry: indKey }));
-    try {
-      const templateData = await api.getTemplate(indKey);
-
-      const safeSeasonality = templateData.seasonality_profiles ? Object.keys(templateData.seasonality_profiles) : ["flat"];
-      const safeInflation = templateData.inflation_presets || templateData.inflation_curve_presets ? Object.keys(templateData.inflation_presets || templateData.inflation_curve_presets) : ["medium"];
-
-      setTemplateOptions({
-        products: templateData.available_dimensions?.product || [],
-        regions: templateData.available_dimensions?.region || [],
-        seasonality: safeSeasonality,
-        inflation: safeInflation,
-      });
-
-      setOverrides({
-        products: templateData.available_dimensions?.product || [],
-        regions: templateData.available_dimensions?.region || [],
-        seasonality: safeSeasonality[0],
-        inflation: safeInflation[0]
-      });
-    } catch (e) {
-      console.error("Could not load template details:", e);
-    }
-  };
-
-  const showToast = (msg, type = "info") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+  const templateOptions = {
+    seasonality: ["flat", "moderate", "high_holiday", "summer_peak"],
+    inflation: ["none", "low", "medium", "high_volatile"]
   };
 
   const submit = async () => {
-    if (!form.name.trim()) return showToast("Project name required", "error");
-    if (!form.industry) return showToast("Select an industry", "error");
+    if (!form.name.trim()) return setToast({ msg: "Project name is required", type: "error" });
     setSaving(true);
     try {
-      const payload = { ...form, template_overrides: overrides };
-      const proj = await api.createProject(payload);
-      navigate("project-detail", { projectId: proj.id });
+      const p = await api.createProject({
+        name: form.name,
+        industry: form.industry,
+        custom_dimensions: {
+          product: form.products,
+          region: form.regions,
+          channel: form.channels,
+          ...overrides
+        }
+      });
+      navigate("project-detail", { projectId: p.id });
     } catch (err) {
-      showToast(err.message, "error");
+      setToast({ msg: err.message, type: "error" });
+    } finally {
       setSaving(false);
     }
   };
 
-  const visibleTemplates = useMemo(() => {
-    const q = templateSearch.toLowerCase();
-    const filtered = templates.filter(t => {
-      if (!q) return true;
-      const meta = INDUSTRY_META[t.industry] || { desc: t.description || "" };
-      return (t.label || "").toLowerCase().includes(q) ||
-             (t.industry || "").toLowerCase().includes(q) ||
-             (meta.desc || "").toLowerCase().includes(q);
-    });
-    const sorted = [...filtered].sort((a, b) => {
-      if (templateSort === "name-asc") return (a.label || "").localeCompare(b.label || "");
-      if (templateSort === "name-desc") return (b.label || "").localeCompare(a.label || "");
-      return 0;
-    });
-    return sorted;
-  }, [templates, templateSearch, templateSort]);
-
   return (
     <div className="np-container">
-      <button onClick={() => navigate("projects")} className="back-btn">
-        ← Back to Projects
-      </button>
+      <button onClick={() => navigate("projects")} className="back-btn">← Back to Projects</button>
+      <SectionHeader title="Create New Project" subtitle="Configure a new synthetic data generation environment." />
 
-      <SectionHeader title="Create New Project" subtitle="Choose an industry template and customize the default parameters." />
+      {/* --- ASYMMETRIC LAYOUT (35% Left / 65% Right) --- */}
+      <div className="np-layout-split">
+        
+        {/* LEFT COLUMN: Name & Industry (Narrower) */}
+        <div className="np-left-col">
+          <Input 
+            label="Project Name" 
+            value={form.name} 
+            onChange={(v) => setForm({ ...form, name: v })} 
+            placeholder="e.g. Q3 SaaS Forecasting" 
+          />
 
-      {loading ? (
-        <div className="loading-container"><Spinner /></div>
-      ) : (
-        <div className="form-stack">
+          <div style={{ marginTop: '32px' }}>
+            <label className="input-label" style={{ marginBottom: '8px', display: 'block', fontWeight: 800, color: '#0f172a', fontSize: '15px' }}>
+              Select Industry Blueprint
+            </label>
+            
+            {/* NEW SCALABLE TEMPLATE DROPDOWN */}
+            <select 
+              value={form.industry} 
+              onChange={(e) => setForm({ ...form, industry: e.target.value })}
+              className="simple-dropdown-select"
+              style={{ marginBottom: '8px', padding: '12px 14px', fontSize: '15px' }}
+            >
+              {Object.keys(INDUSTRY_META).map(key => (
+                <option key={key} value={key}>{INDUSTRY_META[key].name}</option>
+              ))}
+            </select>
+            
+            <div style={{ fontSize: '13px', color: '#64748b', fontStyle: 'italic', paddingLeft: '4px' }}>
+              {INDUSTRY_META[form.industry]?.desc}
+            </div>
+          </div>
+        </div>
 
-          <div className="np-split-layout">
-
-            {/* LEFT COLUMN */}
-            <div className="np-left-col">
-              <Card className="np-card">
-                <div className="section-label">1. Core Information</div>
-                <div className="card-stack">
-                  <Input
-                    label="Project Name"
-                    value={form.name}
-                    onChange={v => setForm(f => ({ ...f, name: v }))}
-                    placeholder="e.g. Q1 2025 Planning Scenarios"
-                  />
-                  <Input
-                    label="Description (optional)"
-                    value={form.description}
-                    onChange={v => setForm(f => ({ ...f, description: v }))}
-                    placeholder="Brief description of this project's purpose"
-                  />
-                </div>
-              </Card>
-
-              <Card className="np-card">
-                <div className="section-label-row">
-                  <div className="section-label">2. Industry Template</div>
-                  <span className="industry-count">{visibleTemplates.length} of {templates.length}</span>
-                </div>
-                <div className="industry-toolbar">
-                  <div className="search-box">
-                    <input
-                      type="text"
-                      placeholder="Search templates..."
-                      value={templateSearch}
-                      onChange={(e) => setTemplateSearch(e.target.value)}
-                    />
-                    {templateSearch && <button className="search-clear" onClick={() => setTemplateSearch("")}>Clear</button>}
-                  </div>
-                  <div className="sort-group">
-                    <span className="label">Sort:</span>
-                    <select value={templateSort} onChange={(e) => setTemplateSort(e.target.value)}>
-                      <option value="name-asc">Name (A-Z)</option>
-                      <option value="name-desc">Name (Z-A)</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="industry-grid">
-                  {visibleTemplates.map(t => {
-                    const meta = INDUSTRY_META[t.industry] || { desc: t.description || "" };
-                    const active = form.industry === t.industry;
-                    return (
-                      <button key={t.industry} onClick={() => handleSelectIndustry(t.industry)} className={`industry-card ${active ? 'active' : ''}`}>
-                        <div className={`industry-tag tag-${t.industry}`}>{(t.industry || "CUS").toUpperCase().slice(0, 4)}</div>
-                        <div className="industry-card-content">
-                          <div className="industry-title">{t.label}</div>
-                          <div className="industry-desc">{meta.desc}</div>
-                        </div>
-                        {active && <span className="active-marker">SELECTED</span>}
-                      </button>
-                    );
-                  })}
-                  {visibleTemplates.length === 0 && (
-                    <div className="industry-empty">No templates match "{templateSearch}".</div>
-                  )}
-                </div>
-              </Card>
+        {/* RIGHT COLUMN: Blueprint Configuration (Wider) */}
+        <div className="np-right-col">
+          <h2 className="blueprint-title">Blueprint Configuration</h2>
+          <p className="blueprint-subtitle">Define dimensions and macroeconomic assumptions.</p>
+          
+          <div className="blueprint-sections">
+            
+            {/* Card 1: Dimensional Hierarchy */}
+            <div className="config-card">
+              <h3 className="section-label">Dimensional Hierarchy</h3>
+              <MultiSelectDropdown label="Active Products" options={PRODUCTS} selected={form.products} onChange={v => setForm({ ...form, products: v })} />
+              <MultiSelectDropdown label="Active Regions" options={REGIONS} selected={form.regions} onChange={v => setForm({ ...form, regions: v })} />
+              <MultiSelectDropdown label="Sales Channels" options={CHANNELS} selected={form.channels} onChange={v => setForm({ ...form, channels: v })} />
             </div>
 
-            {/* RIGHT COLUMN */}
-            <div className="np-right-col">
-              {form.industry ? (
-                <Card className="np-card np-card-full">
-                  <div className="section-label">3. Customize Template Details</div>
-                  <div className="overrides-grid">
-                    <MultiSelectDropdown
-                      label="Available Products"
-                      options={templateOptions.products}
-                      selected={overrides.products}
-                      onChange={(newTags) => setOverrides(o => ({ ...o, products: newTags }))}
-                    />
-                    <MultiSelectDropdown
-                      label="Geographic Regions"
-                      options={templateOptions.regions}
-                      selected={overrides.regions}
-                      onChange={(newTags) => setOverrides(o => ({ ...o, regions: newTags }))}
-                    />
-                    <SimpleDropdown
-                      label="Default Seasonality Profile"
-                      value={overrides.seasonality}
-                      options={templateOptions.seasonality}
-                      onChange={(val) => setOverrides(o => ({ ...o, seasonality: val }))}
-                    />
-                    <SimpleDropdown
-                      label="Baseline Inflation Preset"
-                      value={overrides.inflation}
-                      options={templateOptions.inflation}
-                      onChange={(val) => setOverrides(o => ({ ...o, inflation: val }))}
-                    />
-                  </div>
-                </Card>
-              ) : (
-                <div className="empty-config">
-                  <strong>Select an Industry</strong>
-                  <span>Choose an industry blueprint on the left to configure its template details.</span>
-                </div>
-              )}
+            {/* Card 2: Macroeconomic Overrides */}
+            <div className="config-card">
+              <h3 className="section-label">Macroeconomic Overrides</h3>
+              <SimpleDropdown
+                label="Default Seasonality Profile"
+                value={overrides.seasonality}
+                options={templateOptions.seasonality}
+                onChange={(val) => setOverrides(o => ({ ...o, seasonality: val }))}
+              />
+              <SimpleDropdown
+                label="Baseline Inflation Preset"
+                value={overrides.inflation}
+                options={templateOptions.inflation}
+                onChange={(val) => setOverrides(o => ({ ...o, inflation: val }))}
+              />
             </div>
-
+            
           </div>
 
           <div className="form-actions">
@@ -328,7 +290,9 @@ export default function NewProjectPage({ navigate }) {
             </button>
           </div>
         </div>
-      )}
+
+      </div>
+
       {toast && <Toast message={toast.msg} type={toast.type} />}
     </div>
   );

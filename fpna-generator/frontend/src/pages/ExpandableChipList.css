@@ -1,0 +1,124 @@
+.expandable-chip-container {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  font-family: inherit;
+}
+
+.chip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.chip-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #475569;
+  text-transform: uppercase;
+}
+
+.chip-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.chip-limit-input {
+  width: 45px;
+  padding: 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+  background-color: #f8fafc;
+  color: #0f172a;
+  transition: all 0.2s ease;
+}
+
+.chip-limit-input:focus {
+  border-color: #e11d48;
+  background-color: #ffffff;
+}
+
+/* Hide the up/down arrows in the number input for a cleaner look */
+.chip-limit-input::-webkit-inner-spin-button, 
+.chip-limit-input::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.chip-item {
+  padding: 6px 12px;
+  background-color: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip-more-btn {
+  background-color: #ffe4e6; /* Soft red to match your brand */
+  color: #e11d48;
+  border-color: #fecdd3;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip-more-btn:hover {
+  background-color: #fecdd3;
+}
+
+.dropdown-wrapper {
+  position: relative;
+}
+
+.chip-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  min-width: 180px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.dropdown-item {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: default;
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item:hover {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
