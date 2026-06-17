@@ -4,6 +4,7 @@ import "./ProjectsPage.css";
 
 export default function ProjectsPage({ navigate }) {
   const [projects, setProjects] = useState([]);
+  const [templateCount, setTemplateCount] = useState(0); // NEW: State for templates count
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const [loading, setLoading] = useState(true);
@@ -19,10 +20,18 @@ export default function ProjectsPage({ navigate }) {
   }, [viewMode]);
 
   useEffect(() => {
+    // Fetch Projects
     api.listProjects()
       .then(data => setProjects(data || []))
       .catch(err => console.error("Failed to fetch projects:", err))
       .finally(() => setLoading(false));
+
+    // NEW: Fetch Templates for the KPI Card
+    if (api && typeof api.getTemplates === 'function') {
+      api.getTemplates()
+        .then(data => setTemplateCount(data?.length || 0))
+        .catch(err => console.error("Failed to fetch templates:", err));
+    }
   }, []);
 
   const handleDelete = async (e, projectId) => {
@@ -152,7 +161,8 @@ export default function ProjectsPage({ navigate }) {
           </div>
           <div className="kpi-card">
             <span className="kpi-title">Templates</span>
-            <span className="kpi-value">12</span>
+            {/* FIXED: Now uses the dynamic templateCount */}
+            <span className="kpi-value">{templateCount}</span>
             <div className="kpi-bar"><div className="kpi-bar-fill" style={{ width: '80%', background: '#f59e0b' }}></div></div>
           </div>
         </div>

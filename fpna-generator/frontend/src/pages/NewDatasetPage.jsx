@@ -10,6 +10,149 @@ const parseSafeArray = (data) => {
   return [];
 };
 
+// --- REUSABLE COMPONENT: MultiSelectDropdown ---
+function MultiSelectDropdown({ label, options = [], selected = [], onChange, onAddCustom }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [maxVisible, setMaxVisible] = useState(3);
+
+  const toggleOption = (opt) => {
+    if (selected.includes(opt)) {
+      onChange(selected.filter(x => x !== opt));
+    } else {
+      onChange([...selected, opt]);
+    }
+  };
+
+  const handleAdd = () => {
+    const val = inputValue.trim();
+    if (val) {
+      if (onAddCustom) {
+        onAddCustom(val);
+      } else if (!selected.includes(val)) {
+        onChange([...selected, val]);
+      }
+    }
+    setInputValue("");
+  };
+
+  const remove = (e, opt) => {
+    e.stopPropagation();
+    onChange(selected.filter(x => x !== opt));
+  };
+
+  const handleMaxChange = (e) => {
+    const val = parseInt(e.target.value, 10);
+    setMaxVisible(isNaN(val) || val < 0 ? 0 : val);
+  };
+
+  const visibleSelected = selected.slice(0, maxVisible);
+  const hiddenCount = selected.length - maxVisible;
+
+  return (
+    <div className="msd-container">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '8px' }}>
+        <label className="input-label" style={{ marginBottom: 0, fontWeight: 700, color: '#334155', fontSize: '13px', textTransform: 'uppercase' }}>{label}</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+          <label style={{ margin: 0 }}>Visible limit:</label>
+          <input type="number" min="0" value={maxVisible} onChange={handleMaxChange} onClick={(e) => e.stopPropagation()} className="msd-limit-input" />
+        </div>
+      </div>
+
+      <div className="msd-box" onClick={() => setIsOpen(true)}>
+        <div className="msd-chips">
+          {visibleSelected.map(opt => (
+            <span key={opt} className="msd-chip">
+              {opt}
+              <button className="msd-chip-remove" onClick={(e) => remove(e, opt)}>×</button>
+            </span>
+          ))}
+          {hiddenCount > 0 && (
+            <span className="msd-chip-more" onClick={(e) => { e.stopPropagation(); setIsOpen(true); }}>
+              +{hiddenCount} more
+            </span>
+          )}
+          {selected.length === 0 && <span className="msd-placeholder">Select options...</span>}
+        </div>
+        <div className="msd-chevron">✎ Edit</div>
+      </div>
+
+      {isOpen && (
+        <div className="modal-overlay" onClick={() => setIsOpen(false)} style={{ zIndex: 9999 }}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+            
+            <div className="modal-header">
+              <div>
+                <h2>Manage {label}</h2>
+                <p className="modal-desc">Select or add custom items to your generation list.</p>
+              </div>
+              <button className="modal-close-btn" onClick={() => setIsOpen(false)}>×</button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '0 24px 24px' }}>
+              <div className="msd-add-row">
+                <input
+                  type="text"
+                  placeholder="Type custom item and press Add..."
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+                />
+                <button type="button" onClick={handleAdd}>Add</button>
+              </div>
+
+              <div className="msd-options-grid">
+                {selected.map(opt => (
+                  <label key={opt} className="msd-option-box selected">
+                    <input type="checkbox" checked={true} onChange={() => toggleOption(opt)} />
+                    <span>{opt}</span>
+                  </label>
+                ))}
+                {options.filter(o => !selected.includes(o)).map(opt => (
+                  <label key={opt} className="msd-option-box">
+                    <input type="checkbox" checked={false} onChange={() => toggleOption(opt)} />
+                    <span>{opt}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="modal-actions" style={{ padding: '16px 24px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
+              <button className="btn-primary" onClick={() => setIsOpen(false)} style={{ width: '100%' }}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- LOCAL STYLES FOR THE DROPDOWN ---
+const localStyles = `
+.msd-container { position: relative; width: 100%; margin-bottom: 24px; display: block; }
+.msd-limit-input { width: 45px; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; text-align: center; outline: none; background-color: #f8fafc; color: #0f172a; transition: all 0.2s ease; }
+.msd-limit-input:focus { border-color: #e11d48; background-color: #ffffff; }
+.msd-limit-input::-webkit-inner-spin-button, .msd-limit-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.msd-box { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; min-height: 48px; transition: all 0.2s ease; }
+.msd-box:hover { border-color: #94a3b8; }
+.msd-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+.msd-chip { display: inline-flex; align-items: center; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 10px; font-size: 13px; font-weight: 600; color: #334155; }
+.msd-chip-remove { background: transparent; border: none; color: #94a3b8; margin-left: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+.msd-chip-remove:hover { color: #ef4444; }
+.msd-chip-more { background-color: #ffe4e6; color: #e11d48; border-color: #fecdd3; cursor: pointer; font-weight: 700; padding: 4px 10px; border-radius: 6px; font-size: 13px; display: inline-flex; align-items: center; }
+.msd-placeholder { color: #94a3b8; font-size: 14px; }
+.msd-chevron { color: #e11d48; font-size: 13px; font-weight: 700; margin-left: 12px; }
+.msd-add-row { display: flex; padding: 0 0 16px 0; background: transparent; }
+.msd-add-row input { flex: 1; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px 0 0 6px; font-size: 13px; outline: none; }
+.msd-add-row input:focus { border-color: #e11d48; }
+.msd-add-row button { padding: 10px 16px; background: #0f172a; color: #ffffff; border: none; border-radius: 0 6px 6px 0; font-size: 13px; font-weight: 600; cursor: pointer; }
+.msd-options-grid { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; padding: 4px; }
+.msd-option-box { display: flex; align-items: center; gap: 14px; padding: 12px 16px; cursor: pointer; font-size: 14px; color: #334155; font-weight: 600; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.02); margin: 0; }
+.msd-option-box:hover { border-color: #cbd5e1; background: #f8fafc; transform: translateY(-1px); }
+.msd-option-box.selected { border-color: #e11d48; background-color: #fff1f2; color: #0f172a; box-shadow: 0 2px 4px rgba(225,29,72,0.08); }
+.msd-option-box input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #e11d48; margin: 0; }
+`;
+
 export default function NewDatasetPage({ navigate, params }) {
   const projectId = params?.projectId;
   const industry = params?.industry || "Software as a Service";
@@ -22,12 +165,10 @@ export default function NewDatasetPage({ navigate, params }) {
     seasonality_profile: "flat", inflation_preset: "medium", marketing_intensity: "1.0", sentiment_volatility: "0.15", fx_volatility: "0.05",
   });
 
-  // --- CHANGED: allDimensions is now updatable ---
   const [allDimensions, setAllDimensions] = useState(["Region", "Product", "Channel"]);
   const [activeDimensions, setActiveDimensions] = useState(["Region", "Product", "Channel"]);
-  const [newDimensionName, setNewDimensionName] = useState("");
-
-  const [scenarios] = useState(["Base Scenario", "High Growth", "Recession"]);
+  
+  const [scenarios, setScenarios] = useState(["Base Scenario", "High Growth", "Recession"]);
   const [selectedScenarios, setSelectedScenarios] = useState(["Base Scenario"]);
 
   const [availableMembers, setAvailableMembers] = useState({
@@ -36,16 +177,9 @@ export default function NewDatasetPage({ navigate, params }) {
     Channel: ["Direct Sales", "Partner Network", "Online Self-Service"],
   });
   const [selectedMembers, setSelectedMembers] = useState({ Region: ["North America", "Europe"], Product: ["Enterprise", "Pro Plan"], Channel: [] });
-  const [newMemberInputs, setNewMemberInputs] = useState({});
 
-  const [accounts] = useState(["Revenue", "COGS", "Gross Profit", "Payroll", "Marketing", "SGA", "R&D", "EBITDA", "Depreciation & Amortization", "EBIT", "Net Income"]);
+  const [accounts, setAccounts] = useState(["Revenue", "COGS", "Gross Profit", "Payroll", "Marketing", "SGA", "R&D", "EBITDA", "Depreciation & Amortization", "EBIT", "Net Income"]);
   const [selectedAccounts, setSelectedAccounts] = useState(["Revenue", "COGS", "Gross Profit", "Payroll", "SGA", "EBITDA", "EBIT"]);
-  const [newAccountName, setNewAccountName] = useState("");
-
-  const [memberSearch, setMemberSearch] = useState({});
-  const [accountSearch, setAccountSearch] = useState("");
-  const [accountSort, setAccountSort] = useState("default");
-  const [memberSort, setMemberSort] = useState("default");
 
   useEffect(() => {
     if (!projectId) return;
@@ -78,78 +212,28 @@ export default function NewDatasetPage({ navigate, params }) {
 
   const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const toggleArrayItem = (setter, item) => setter(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
-
-  const toggleMember = (dim, member) => setSelectedMembers(prev => {
-    const current = prev[dim] || [];
-    return { ...prev, [dim]: current.includes(member) ? current.filter(m => m !== member) : [...current, member] };
-  });
-
-  // --- NEW: Add a Custom Column / Dimension ---
-  const handleAddDimension = () => {
-    const dim = newDimensionName.trim();
+  const handleAddDimension = (val) => {
+    const dim = val.trim();
     if (!dim) return;
-    
-    // Format perfectly (e.g. "cohort" -> "Cohort")
     const formattedDim = dim.charAt(0).toUpperCase() + dim.slice(1);
 
-    if (!allDimensions.includes(formattedDim)) {
-      setAllDimensions(prev => [...prev, formattedDim]);
-      setActiveDimensions(prev => [...prev, formattedDim]);
+    if (!allDimensions.includes(formattedDim)) setAllDimensions(prev => [...prev, formattedDim]);
+    if (!activeDimensions.includes(formattedDim)) setActiveDimensions(prev => [...prev, formattedDim]);
+    if (!availableMembers[formattedDim]) {
       setAvailableMembers(prev => ({ ...prev, [formattedDim]: [] }));
       setSelectedMembers(prev => ({ ...prev, [formattedDim]: [] }));
     }
-    setNewDimensionName("");
   };
 
-  const handleAddMember = (dim) => {
-    const val = newMemberInputs[dim]?.trim();
-    if (val && !(availableMembers[dim] || []).includes(val)) {
-      setAvailableMembers(prev => ({ ...prev, [dim]: [...(prev[dim] || []), val] }));
-      toggleMember(dim, val);
-      setNewMemberInputs(prev => ({ ...prev, [dim]: "" }));
-    }
+  const handleAddScenario = (val) => {
+    const scen = val.trim();
+    if (!scen) return;
+    if (!scenarios.includes(scen)) setScenarios(prev => [...prev, scen]);
+    if (!selectedScenarios.includes(scen)) setSelectedScenarios(prev => [...prev, scen]);
   };
-
-  const handleAddAccount = () => {
-    const v = newAccountName.trim();
-    if (v && !accounts.includes(v) && !selectedAccounts.includes(v)) {
-      setSelectedAccounts(prev => [...prev, v]);
-      setNewAccountName("");
-    }
-  };
-
-  const handleSelectAllMembers = (dim) => setSelectedMembers(prev => ({ ...prev, [dim]: [...(availableMembers[dim] || [])] }));
-  const handleClearAllMembers = (dim) => setSelectedMembers(prev => ({ ...prev, [dim]: [] }));
-  const handleSelectAllAccounts = () => setSelectedAccounts([...accounts]);
-  const handleClearAllAccounts = () => setSelectedAccounts([]);
-  const handleSelectAllScenarios = () => setSelectedScenarios([...scenarios]);
-
-  const filterAndSortMembers = (members, dim) => {
-    const q = (memberSearch[dim] || "").toLowerCase();
-    const filtered = members.filter(m => !q || m.toLowerCase().includes(q));
-    if (memberSort === "az") return [...filtered].sort((a, b) => a.localeCompare(b));
-    if (memberSort === "za") return [...filtered].sort((a, b) => b.localeCompare(a));
-    return filtered;
-  };
-
-  const filteredAccounts = useMemo(() => {
-    const q = accountSearch.toLowerCase();
-    const filtered = accounts.filter(a => !q || a.toLowerCase().includes(q));
-    if (accountSort === "az") return [...filtered].sort((a, b) => a.localeCompare(b));
-    if (accountSort === "za") return [...filtered].sort((a, b) => b.localeCompare(a));
-    if (accountSort === "selected") return [...filtered].sort((a, b) => {
-      const aSel = selectedAccounts.includes(a) ? 0 : 1;
-      const bSel = selectedAccounts.includes(b) ? 0 : 1;
-      return aSel - bSel;
-    });
-    return filtered;
-  }, [accounts, accountSearch, accountSort, selectedAccounts]);
 
   const handleGenerate = async () => {
     if (!formData.name.trim()) return alert("Please enter a dataset name.");
-    
-    // --- CHANGED: Dynamically validate all custom and core dimensions ---
     for (const dim of activeDimensions) {
       if (!selectedMembers[dim] || selectedMembers[dim].length === 0) {
         return alert(`Error: You have '${dim}' enabled as an Active Dimension, but you haven't selected any members for it. Please select at least one!`);
@@ -198,6 +282,8 @@ export default function NewDatasetPage({ navigate, params }) {
 
   return (
     <div className="new-ds-wrapper">
+      <style>{localStyles}</style>
+      
       <div className="new-ds-header">
         <button onClick={() => navigate("project-detail", { projectId })} className="back-btn">Back to Project</button>
         <div className="header-titles">
@@ -258,50 +344,24 @@ export default function NewDatasetPage({ navigate, params }) {
                 </div>
               </div>
 
-              <div className="subsection-header">
-                <h4 className="section-subtitle">Active Dimensions</h4>
-                <div className="subsection-actions">
-                  <button className="btn-link-small" onClick={() => setActiveDimensions([...allDimensions])}>Select All</button>
-                  <button className="btn-link-small" onClick={() => setActiveDimensions([])}>Clear</button>
-                </div>
-              </div>
-              <div className="member-chip-grid">
-                {allDimensions.map(dim => (
-                  <button key={dim}
-                    className={`member-chip ${activeDimensions.includes(dim) ? "selected" : ""}`}
-                    onClick={() => toggleArrayItem(setActiveDimensions, dim)}>
-                    {dim}
-                  </button>
-                ))}
-              </div>
-
-              {/* --- NEW: Add custom dimension input UI --- */}
-              <div className="add-member-row" style={{ marginTop: 12, marginBottom: 24 }}>
-                <input
-                  type="text"
-                  placeholder="Add custom dimension (e.g. Segment, Cohort)..."
-                  value={newDimensionName}
-                  onChange={(e) => setNewDimensionName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleAddDimension(); }}
+              <div style={{ marginTop: "32px", paddingTop: "24px", borderTop: "1px solid #e2e8f0" }}>
+                <MultiSelectDropdown
+                  label="Active Dimensions"
+                  options={allDimensions}
+                  selected={activeDimensions}
+                  onChange={setActiveDimensions}
+                  onAddCustom={handleAddDimension}
                 />
-                <button className="btn-outline-small" onClick={handleAddDimension}>Add</button>
-              </div>
 
-              <div className="subsection-header" style={{ marginTop: 16 }}>
-                <h4 className="section-subtitle">Active Scenarios</h4>
-                <div className="subsection-actions">
-                  <button className="btn-link-small" onClick={handleSelectAllScenarios}>Select All</button>
-                  <button className="btn-link-small" onClick={() => setSelectedScenarios([])}>Clear</button>
+                <div style={{ marginTop: "24px" }}>
+                  <MultiSelectDropdown
+                    label="Active Scenarios"
+                    options={scenarios}
+                    selected={selectedScenarios}
+                    onChange={setSelectedScenarios}
+                    onAddCustom={handleAddScenario}
+                  />
                 </div>
-              </div>
-              <div className="member-chip-grid">
-                {scenarios.map(scen => (
-                  <button key={scen}
-                    className={`member-chip ${selectedScenarios.includes(scen) ? "selected" : ""}`}
-                    onClick={() => toggleArrayItem(setSelectedScenarios, scen)}>
-                    {scen}
-                  </button>
-                ))}
               </div>
 
               <div className="form-actions">
@@ -314,66 +374,41 @@ export default function NewDatasetPage({ navigate, params }) {
             <div className="form-panel">
               <h2 className="panel-title">Step 2 — Dimensional Architecture</h2>
 
-              <div className="dim-toolbar">
-                <div className="sort-group">
-                  <span className="label">Sort:</span>
-                  <select value={memberSort} onChange={(e) => setMemberSort(e.target.value)}>
-                    <option value="default">Default</option>
-                    <option value="az">A to Z</option>
-                    <option value="za">Z to A</option>
-                  </select>
-                </div>
-              </div>
-
               <div className="dimensions-container">
                 {activeDimensions.map(dimName => {
                   const members = availableMembers[dimName] || [];
-                  const selectedCount = selectedMembers[dimName]?.length || 0;
-                  const visibleMembers = filterAndSortMembers(members, dimName);
+                  const selected = selectedMembers[dimName] || [];
+                  
+                  // Helper to match the specific naming convention from your screenshot
+                  const getLabelForDim = (dim) => {
+                    if (dim.toLowerCase() === 'product') return 'ACTIVE PRODUCTS';
+                    if (dim.toLowerCase() === 'region') return 'ACTIVE REGIONS';
+                    if (dim.toLowerCase() === 'channel') return 'SALES CHANNELS';
+                    return `ACTIVE ${dim.toUpperCase()}S`;
+                  };
+
                   return (
-                    <div key={dimName} className="dimension-group">
-                      <div className="dimension-header">
-                        <h4 className="dimension-title">{dimName}</h4>
-                        <div className="dimension-controls">
-                          <span className={`dimension-count ${selectedCount > 0 ? "active-count" : ""}`}>{selectedCount} of {members.length} selected</span>
-                          <button className="btn-link-small" onClick={() => handleSelectAllMembers(dimName)}>All</button>
-                          <button className="btn-link-small" onClick={() => handleClearAllMembers(dimName)}>Clear</button>
-                        </div>
-                      </div>
-
-                      <div className="dim-search">
-                        <input
-                          type="text"
-                          placeholder={`Search ${dimName} members...`}
-                          value={memberSearch[dimName] || ""}
-                          onChange={(e) => setMemberSearch(prev => ({ ...prev, [dimName]: e.target.value }))}
-                        />
-                      </div>
-
-                      <div className="member-chip-grid">
-                        {visibleMembers.map(member => (
-                          <button key={member}
-                            className={`member-chip ${(selectedMembers[dimName] || []).includes(member) ? "selected" : ""}`}
-                            onClick={() => toggleMember(dimName, member)}>
-                            {member}
-                          </button>
-                        ))}
-                        {visibleMembers.length === 0 && <span className="empty-inline">No members match.</span>}
-                      </div>
-
-                      <div className="add-member-row">
-                        <input
-                          type="text"
-                          placeholder={`Add new ${dimName} member...`}
-                          value={newMemberInputs[dimName] || ""}
-                          onChange={(e) => setNewMemberInputs(prev => ({ ...prev, [dimName]: e.target.value }))}
-                          onKeyDown={(e) => { if (e.key === "Enter") handleAddMember(dimName); }}
-                        />
-                        <button className="btn-outline-small" onClick={() => handleAddMember(dimName)}>Add</button>
-                      </div>
-                    </div>
+                    <MultiSelectDropdown
+                      key={dimName}
+                      label={getLabelForDim(dimName)}
+                      options={members}
+                      selected={selected}
+                      onChange={(newSelected) => setSelectedMembers(prev => ({ ...prev, [dimName]: newSelected }))}
+                      onAddCustom={(newVal) => {
+                        // Add to available pool if new
+                        if (!availableMembers[dimName]?.includes(newVal)) {
+                          setAvailableMembers(prev => ({ ...prev, [dimName]: [...(prev[dimName] || []), newVal] }));
+                        }
+                        // Automatically select it
+                        setSelectedMembers(prev => {
+                          const curr = prev[dimName] || [];
+                          return curr.includes(newVal) ? prev : { ...prev, [dimName]: [...curr, newVal] };
+                        });
+                      }}
+                    />
                   );
                 })}
+                
                 {activeDimensions.length === 0 && (
                   <div className="empty-state">
                     <strong>No active dimensions.</strong>
@@ -381,6 +416,7 @@ export default function NewDatasetPage({ navigate, params }) {
                   </div>
                 )}
               </div>
+              
               <div className="form-actions">
                 <button className="btn-outline" onClick={() => setActiveStep(1)}>Back</button>
                 <button className="btn-primary" onClick={() => setActiveStep(3)}>Continue</button>
@@ -392,54 +428,17 @@ export default function NewDatasetPage({ navigate, params }) {
             <div className="form-panel">
               <h2 className="panel-title">Step 3 — Chart of Accounts</h2>
 
-              <div className="accounts-toolbar">
-                <div className="search-box">
-                  <input
-                    type="text"
-                    placeholder="Search accounts..."
-                    value={accountSearch}
-                    onChange={(e) => setAccountSearch(e.target.value)}
-                  />
-                  {accountSearch && <button className="search-clear" onClick={() => setAccountSearch("")}>Clear</button>}
-                </div>
-                <div className="sort-group">
-                  <span className="label">Sort:</span>
-                  <select value={accountSort} onChange={(e) => setAccountSort(e.target.value)}>
-                    <option value="default">Default</option>
-                    <option value="az">A to Z</option>
-                    <option value="za">Z to A</option>
-                    <option value="selected">Selected First</option>
-                  </select>
-                </div>
-                <div className="subsection-actions">
-                  <button className="btn-link-small" onClick={handleSelectAllAccounts}>Select All</button>
-                  <button className="btn-link-small" onClick={handleClearAllAccounts}>Clear</button>
-                </div>
-                <span className="dimension-count active-count">{selectedAccounts.length} of {accounts.length} selected</span>
-              </div>
-
-              <div className="dimension-group" style={{ background: "#fff" }}>
-                <div className="member-chip-grid">
-                  {filteredAccounts.map(acc => (
-                    <button key={acc}
-                      className={`member-chip ${selectedAccounts.includes(acc) ? "selected" : ""}`}
-                      onClick={() => toggleArrayItem(setSelectedAccounts, acc)}>
-                      {acc}
-                    </button>
-                  ))}
-                  {filteredAccounts.length === 0 && <span className="empty-inline">No accounts match.</span>}
-                </div>
-
-                <div className="add-member-row" style={{ marginTop: 12 }}>
-                  <input
-                    type="text"
-                    placeholder="Add custom account..."
-                    value={newAccountName}
-                    onChange={(e) => setNewAccountName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleAddAccount(); }}
-                  />
-                  <button className="btn-outline-small" onClick={handleAddAccount}>Add</button>
-                </div>
+              <div className="dimensions-container">
+                <MultiSelectDropdown
+                  label="FINANCIAL LINE ITEMS"
+                  options={accounts}
+                  selected={selectedAccounts}
+                  onChange={setSelectedAccounts}
+                  onAddCustom={(newVal) => {
+                    if (!accounts.includes(newVal)) setAccounts(prev => [...prev, newVal]);
+                    if (!selectedAccounts.includes(newVal)) setSelectedAccounts(prev => [...prev, newVal]);
+                  }}
+                />
               </div>
 
               <div className="form-actions">
@@ -494,7 +493,6 @@ export default function NewDatasetPage({ navigate, params }) {
                   {renderSummaryRow("Scenarios:", selectedScenarios.join(', ') || 'None')}
                   {renderSummaryRow("Accounts:", selectedAccounts.length)}
                   
-                  {/* --- CHANGED: Dynamically render all dimensions here! --- */}
                   {activeDimensions.length === 0 && renderSummaryRow("Dimensions:", "None", true)}
                   {activeDimensions.map((dim, idx) => (
                     <React.Fragment key={dim}>
