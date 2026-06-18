@@ -1,6 +1,8 @@
 import time
 import os
 import logging
+
+from flask import app
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -8,7 +10,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fpa_studio_security")
-
+origins = [
+    "http://localhost:5173",  # For local testing
+    "https://datagenerator.vercel.app" # <--- YOUR VERCEL URL HERE
+]
 class EnterpriseLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
@@ -44,10 +49,10 @@ def setup_middleware(app: FastAPI):
     # 1. Add Logging (Executes second)
     app.add_middleware(EnterpriseLoggingMiddleware)
 
-    # 2. Add CORS (Executes FIRST! FastAPI processes the last-added middleware first)
-    app.add_middleware(
+  
+app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Allow all origins for development; restrict in production
+        allow_origins=origins,  # Allow all origins for development; restrict in production
         allow_credentials=True,
         allow_methods=["*"], 
         allow_headers=["*"], 

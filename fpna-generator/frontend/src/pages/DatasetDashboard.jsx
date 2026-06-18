@@ -17,22 +17,25 @@ export default function DatasetDashboard({ projectId, datasetId }) {
   const [selectedMetrics, setSelectedMetrics] = useState(['revenue', 'ebitda']);
   const [chartType, setChartType] = useState('Bar');
 
+  // Grab the dynamic URL from Vite
+  const API_URL = import.meta.env.VITE_API_URL;
+
   useEffect(() => {
-    // Load standard dashboard stats
-    fetch(`http://localhost:8000/api/projects/${projectId}/datasets/${datasetId}/dashboard-stats`)
+    // Load standard dashboard stats using the dynamic API_URL
+    fetch(`${API_URL}/projects/${projectId}/datasets/${datasetId}/dashboard-stats`)
       .then(res => res.json())
       .then(data => {
         setStats(data);
         setLoading(false);
       })
       .catch(err => console.error("Failed to load stats", err));
-  }, [projectId, datasetId]);
+  }, [projectId, datasetId, API_URL]);
 
-  // Fetch custom chart data whenever the user changes the dropdowns!
+  // Fetch custom chart data using the dynamic API_URL
   useEffect(() => {
     if (!datasetId || selectedMetrics.length === 0) return;
 
-    fetch(`http://localhost:8000/api/projects/${projectId}/datasets/${datasetId}/custom-chart`, {
+    fetch(`${API_URL}/projects/${projectId}/datasets/${datasetId}/custom-chart`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dimension: selectedDim, metrics: selectedMetrics })
@@ -40,7 +43,7 @@ export default function DatasetDashboard({ projectId, datasetId }) {
       .then(res => res.json())
       .then(data => setCustomData(data.data || []))
       .catch(err => console.error("Failed to fetch custom chart data", err));
-  }, [projectId, datasetId, selectedDim, selectedMetrics]);
+  }, [projectId, datasetId, selectedDim, selectedMetrics, API_URL]);
 
   if (loading) return <div className="dashboard-loading">Analyzing million-row dataset...</div>;
   if (!stats || stats.error) return null;
