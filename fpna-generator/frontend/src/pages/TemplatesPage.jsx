@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from "react";
 import "./TemplatesPage.css";
 
-const API_BASE = "http://localhost:8000/api";
+// --- PRODUCTION READY FIX: Dynamic API Base ---
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState(null); // NEW: Tracks which template is being edited
+  const [editingTemplate, setEditingTemplate] = useState(null); 
 
   const [formData, setFormData] = useState({
     label: "",
@@ -62,7 +63,7 @@ export default function TemplatesPage() {
   const handleSave = async () => {
     if (!formData.label.trim()) return alert("Template Name is required.");
     
-    // Auto-generate key if empty (only matters for new templates)
+    // Auto-generate key if empty
     const industryKey = formData.industry.trim() 
       ? formData.industry.toLowerCase().replace(/[^a-z0-9]/g, '_') 
       : formData.label.toLowerCase().replace(/[^a-z0-9]/g, '_');
@@ -81,7 +82,6 @@ export default function TemplatesPage() {
       inflation_presets: { "low": {}, "medium": {}, "high": {} }
     };
 
-    // Determine if we are updating (PUT) or creating (POST)
     const method = editingTemplate ? "PUT" : "POST";
     const url = editingTemplate ? `${API_BASE}/templates/${editingTemplate}` : `${API_BASE}/templates`;
 
@@ -188,7 +188,7 @@ export default function TemplatesPage() {
                   placeholder="e.g. healthcare (Auto-generated if left blank)" 
                   value={formData.industry}
                   onChange={e => setFormData(f => ({ ...f, industry: e.target.value }))}
-                  disabled={!!editingTemplate} // Cannot change the unique ID once created!
+                  disabled={!!editingTemplate} 
                   style={{ opacity: editingTemplate ? 0.6 : 1, cursor: editingTemplate ? 'not-allowed' : 'text' }}
                 />
               </div>
