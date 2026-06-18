@@ -1,4 +1,5 @@
 import time
+import os
 import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,7 +25,21 @@ class EnterpriseLoggingMiddleware(BaseHTTPMiddleware):
         
         response.headers["X-Process-Time"] = str(process_time)
         return response
+def setup_middleware(app: FastAPI):
+    # 1. Add Logging
+    app.add_middleware(EnterpriseLoggingMiddleware)
 
+    # 2. Add dynamic frontend URL from environment variables
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    # 3. Add CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", FRONTEND_URL],
+        allow_credentials=True,
+        allow_methods=["*"], 
+        allow_headers=["*"], 
+    )
 def setup_middleware(app: FastAPI):
     # 1. Add Logging (Executes second)
     app.add_middleware(EnterpriseLoggingMiddleware)
