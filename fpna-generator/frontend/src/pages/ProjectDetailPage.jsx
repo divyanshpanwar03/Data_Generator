@@ -1,12 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 // UNCOMMENT THESE IN YOUR LOCAL PROJECT:
- import { api } from "../hooks/api";
- import "./ProjectDetailPage.css";
+ //import { api } from "../hooks/api";
+ //import "./ProjectDetailPage.css";
 import DatasetDashboard from './DatasetDashboard';
-
-// Mock components to prevent preview compilation errors
-const api = { getProject: async () => ({ id: 1, name: "Sample Project" }) };
-const DatasetDashboard = ({ projectId, datasetId }) => <div style={{padding: 20, textAlign: 'center'}}>Dataset Dashboard Placeholder</div>;
 
 // --- PRODUCTION READY FIX: Dynamic API Base ---
 const API_BASE = "https://data-generator-backend-qrqm.onrender.com/api"; // Note: Restore import.meta.env.VITE_API_URL locally
