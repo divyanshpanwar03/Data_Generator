@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-// UNCOMMENT THESE IN YOUR LOCAL PROJECT:
- import { api } from "../hooks/api";
- import "./ProjectDetailPage.css";
+import { api } from "../hooks/api";
+import "./ProjectDetailPage.css";
 import DatasetDashboard from './DatasetDashboard';
 
-
 // --- PRODUCTION READY FIX: Dynamic API Base ---
-const API_BASE = "https://data-generator-backend-qrqm.onrender.com/api"; // Note: Restore import.meta.env.VITE_API_URL locally
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 export default function ProjectDetailPage({ navigate, params }) {
   const { projectId } = params || {};
