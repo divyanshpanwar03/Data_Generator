@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 // UNCOMMENT THESE IN YOUR LOCAL PROJECT:
- //import { api } from "../hooks/api";
- //import "./ProjectDetailPage.css";
+ import { api } from "../hooks/api";
+ import "./ProjectDetailPage.css";
 import DatasetDashboard from './DatasetDashboard';
 
 // --- PRODUCTION READY FIX: Dynamic API Base ---
