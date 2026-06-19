@@ -161,8 +161,8 @@ export default function ProjectsPage({ navigate }) {
             About This Platform
           </h1>
           <p style={{ fontSize: '14px', color: '#475569', lineHeight: '1.6', margin: 0, fontWeight: '500' }}>
-            Welcome to the Synthetic Financial Data Generator. This tool allows you to instantly create high-fidelity, realistic financial datasets tailored to specific business models. By leveraging industry-standard templates (<strong>Retail</strong>, <strong>SaaS</strong>, and <strong>CPG</strong>), the application generates thousands of realistic transaction records that you can analyze, visualize, and export directly from your dashboard.
-          </p>
+           Welcome to the Synthetic Financial Data Generator. This tool allows you to instantly create high-fidelity, realistic financial datasets tailored to specific business models. Click on create project to start your project journey.
+             </p>
         </div>
         {/* --------------------------------- */}
 
