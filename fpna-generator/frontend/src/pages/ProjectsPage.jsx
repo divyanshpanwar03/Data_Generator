@@ -4,7 +4,7 @@ import "./ProjectsPage.css";
 
 export default function ProjectsPage({ navigate }) {
   const [projects, setProjects] = useState([]);
-  const [templateCount, setTemplateCount] = useState(0); // NEW: State for templates count
+  const [templateCount, setTemplateCount] = useState(0); 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const [loading, setLoading] = useState(true);
@@ -20,13 +20,11 @@ export default function ProjectsPage({ navigate }) {
   }, [viewMode]);
 
   useEffect(() => {
-    // Fetch Projects
     api.listProjects()
       .then(data => setProjects(data || []))
       .catch(err => console.error("Failed to fetch projects:", err))
       .finally(() => setLoading(false));
 
-    // NEW: Fetch Templates for the KPI Card
     if (api && typeof api.getTemplates === 'function') {
       api.getTemplates()
         .then(data => setTemplateCount(data?.length || 0))
@@ -46,7 +44,6 @@ export default function ProjectsPage({ navigate }) {
     }
   };
 
-  // SAFE STRING EXTRACTOR (Prevents the crash)
   const getIndustryKey = (project) => {
     if (!project || !project.industry) return 'custom';
     if (typeof project.industry === 'string') return project.industry.toLowerCase();
@@ -148,6 +145,27 @@ export default function ProjectsPage({ navigate }) {
 
       <div className="dashboard-container">
         
+        {/* --- WELCOME DESCRIPTION BLOCK --- */}
+        <div 
+          className="project-description-card" 
+          style={{ 
+            backgroundColor: '#ffffff', 
+            border: '1px solid #e2e8f0', 
+            borderRadius: '12px', 
+            padding: '24px', 
+            marginBottom: '24px',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)'
+          }}
+        >
+          <h1 style={{ marginTop: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a', marginBottom: '8px' }}>
+            About This Platform
+          </h1>
+          <p style={{ fontSize: '14px', color: '#475569', lineHeight: '1.6', margin: 0, fontWeight: '500' }}>
+            Welcome to the Synthetic Financial Data Generator. This tool allows you to instantly create high-fidelity, realistic financial datasets tailored to specific business models. By leveraging industry-standard templates (<strong>Retail</strong>, <strong>SaaS</strong>, and <strong>CPG</strong>), the application generates thousands of realistic transaction records that you can analyze, visualize, and export directly from your dashboard.
+          </p>
+        </div>
+        {/* --------------------------------- */}
+
         <div className="kpi-grid">
           <div className="kpi-card">
             <span className="kpi-title">Total Projects</span>
@@ -161,7 +179,6 @@ export default function ProjectsPage({ navigate }) {
           </div>
           <div className="kpi-card">
             <span className="kpi-title">Templates</span>
-            {/* FIXED: Now uses the dynamic templateCount */}
             <span className="kpi-value">{templateCount}</span>
             <div className="kpi-bar"><div className="kpi-bar-fill" style={{ width: '80%', background: '#f59e0b' }}></div></div>
           </div>
